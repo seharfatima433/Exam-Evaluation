@@ -1,0 +1,41 @@
+name: ai_exam_evaluation
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  intl: ^0.20.2
+  provider: ^6.1.5+1
+  shared_preferences: ^2.2.2
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  flutter_animate: ^4.5.2
+  google_fonts: ^6.2.1
+  flutter_pdfview: ^1.4.4
+  syncfusion_flutter_pdfviewer: ^33.1.49
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/
+
+# Simple icon configuration (adaptive_icon_foreground hata diya)
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  remove_alpha_ios: true
