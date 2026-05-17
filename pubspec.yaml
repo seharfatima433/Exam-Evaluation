@@ -20,6 +20,7 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_pdfview: ^1.4.4
   syncfusion_flutter_pdfviewer: ^33.1.49
+  path_provider: ^2.1.5
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -31,6 +32,7 @@ flutter:
 
   assets:
     - assets/icon/
+    - assets/nsct/
 
 # Simple icon configuration (adaptive_icon_foreground hata diya)
 flutter_launcher_icons:

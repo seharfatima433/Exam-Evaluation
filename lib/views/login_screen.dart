@@ -8,6 +8,7 @@ import '../controllers/auth_controller.dart';
 import '../utils/app_theme.dart';
 import 'teacher_screen.dart';
 import 'student_screen.dart';
+import 'admin_screen.dart';
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -78,13 +79,18 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     if (ok) {
       final user = _authCtrl.currentUser!;
-      Widget dest = user.role == 'teacher'
-          ? TeacherScreen(teacherId: user.id, teacherName: user.name)
-          : StudentScreen(
-        studentName: user.name,
-        studentId: user.id,
-        rollNo: user.rollNo,
-      );
+      Widget dest;
+      if (user.role == 'admin') {
+        dest = AdminDashboard(adminName: user.name);
+      } else if (user.role == 'teacher') {
+        dest = TeacherScreen(teacherId: user.id, teacherName: user.name);
+      } else {
+        dest = StudentScreen(
+          studentName: user.name,
+          studentId: user.id,
+          rollNo: user.rollNo,
+        );
+      }
       Navigator.pushReplacement(
           context,
           PageRouteBuilder(

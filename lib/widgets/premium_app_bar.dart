@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_theme.dart';
 import '../utils/theme_controller.dart';
+import '../views/login_screen.dart';
 
 /// Premium gradient app bar with:
 ///   • Curved wave bottom edge
@@ -22,6 +23,9 @@ class PremiumAppBar extends StatelessWidget {
   /// Show sun/moon theme-toggle icon in the trailing area
   final bool showThemeToggle;
 
+  /// Show logout button in the trailing area
+  final bool showLogout;
+
   const PremiumAppBar({
     super.key,
     required this.title,
@@ -34,6 +38,7 @@ class PremiumAppBar extends StatelessWidget {
     this.tag,
     this.tagColor,
     this.showThemeToggle = false,
+    this.showLogout = false,
   });
 
   @override
@@ -142,6 +147,16 @@ class PremiumAppBar extends StatelessWidget {
                       ),
                     ],
 
+                    // ── Logout button ────────────────────────────
+                    if (showLogout) ...[
+                      const SizedBox(width: 8),
+                      _GlassIconButton(
+                        icon: Icons.logout_rounded,
+                        size: 18,
+                        onTap: () => _confirmLogout(context),
+                      ),
+                    ],
+
                     // ── Action button ────────────────────────────
                     if (actionIcon != null) ...[
                       const SizedBox(width: 8),
@@ -165,6 +180,78 @@ class PremiumAppBar extends StatelessWidget {
         .slideY(begin: -0.7, end: 0, duration: 380.ms, curve: Curves.easeOut)
         .fadeIn(duration: 380.ms);
   }
+}
+
+// ── Logout confirmation dialog ────────────────────────────────────
+void _confirmLogout(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: Theme.of(context).cardColor,
+      title: Row(
+        children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.redBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.logout_rounded,
+                size: 18, color: AppTheme.red),
+          ),
+          const SizedBox(width: 12),
+          Text('Logout',
+              style: GoogleFonts.outfit(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.darkText1
+                      : AppTheme.text1)),
+        ],
+      ),
+      content: Text(
+        'Are you sure you want to logout?',
+        style: GoogleFonts.outfit(
+            fontSize: 13,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppTheme.darkText3
+                : AppTheme.text3),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancel',
+              style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.darkText3
+                      : AppTheme.text3,
+                  fontWeight: FontWeight.w600)),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context); // close dialog
+            // Login screen pe wapas — sab routes hata do
+            Navigator.of(context).pushAndRemoveUntil(
+              PageRouteBuilder(
+                pageBuilder: (_, a, __) => const LoginScreen(),
+                transitionsBuilder: (_, a, __, child) =>
+                    FadeTransition(opacity: a, child: child),
+                transitionDuration: const Duration(milliseconds: 300),
+              ),
+                  (route) => false,
+            );
+          },
+          child: Text('Logout',
+              style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: AppTheme.red,
+                  fontWeight: FontWeight.w700)),
+        ),
+      ],
+    ),
+  );
 }
 
 // ── Wave-curve bottom clipper ─────────────────────────────────────
@@ -232,7 +319,7 @@ class _GlassIconButtonState extends State<_GlassIconButton>
             color: Colors.white.withOpacity(0.14),
             borderRadius: BorderRadius.circular(11),
             border:
-                Border.all(color: Colors.white.withOpacity(0.24), width: 1.2),
+            Border.all(color: Colors.white.withOpacity(0.24), width: 1.2),
           ),
           child: Icon(widget.icon, size: widget.size, color: Colors.white),
         ),

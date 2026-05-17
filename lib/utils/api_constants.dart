@@ -10,7 +10,8 @@ class ApiConstants {
 
   static String teacherCourses(int teacherId)  => '$baseUrl/teacher-courses/$teacherId';
   static String courseQuizzes(int tid, int cid) => '$baseUrl/course-quizzes/$tid/$cid';
-  static String quizByCode(String code)         => '$baseUrl/quiz/$code';
+  static String quizByCode(String code)        => '$baseUrl/quiz/$code';
+  static String quizByCodeTeacher(String code) => '$baseUrl/quiz/teacher/$code';
 
   // ── TIMEOUTS ──────────────────────────────
   static const Duration timeout = Duration(seconds: 200);

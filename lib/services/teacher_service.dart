@@ -136,7 +136,7 @@ class TeacherService {
     }
   }
 
-  // ── API 5: Get Full Quiz by Code ──────────
+  // ── API 5: Student side ───────────────────
   Future<Map<String, dynamic>> fetchQuizByCode(String quizCode) async {
     try {
       final response = await http
@@ -149,6 +149,25 @@ class TeacherService {
         return {'success': true, 'data': FullQuiz.fromJson(data)};
       } else {
         return {'success': false, 'message': 'Quiz not found'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // ── API 5b: Teacher side — /quiz/teacher/{code}
+  Future<Map<String, dynamic>> fetchQuizByCodeTeacher(String quizCode) async {
+    try {
+      final response = await http
+          .get(Uri.parse(ApiConstants.quizByCodeTeacher(quizCode)),
+          headers: {'Content-Type': 'application/json'})
+          .timeout(ApiConstants.timeout);
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['status'] == true) {
+        return {'success': true, 'data': FullQuiz.fromJson(data)};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Quiz not found'};
       }
     } catch (e) {
       return {'success': false, 'message': e.toString()};

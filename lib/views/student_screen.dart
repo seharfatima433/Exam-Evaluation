@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_theme.dart';
 import '../widgets/premium_app_bar.dart';
+import 'quiz_view_screen.dart';
 
 // ── NSCT Syllabus Data ────────────────────────────────────────────
 class NsctSubject {
@@ -272,7 +273,6 @@ class StudentScreen extends StatefulWidget {
 
 class _StudentScreenState extends State<StudentScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  int _tab = 0;
 
   String get _initials {
     final p = widget.studentName.trim().split(' ');
@@ -296,6 +296,7 @@ class _StudentScreenState extends State<StudentScreen> {
             widget.rollNo != null ? 'Roll: ${widget.rollNo}' : 'Student',
             initials: _initials,
             showThemeToggle: true,
+            showLogout: true,
             actionIcon: Icons.menu_rounded,
             onActionTap: () {
               _scaffoldKey.currentState?.openDrawer();
@@ -303,47 +304,318 @@ class _StudentScreenState extends State<StudentScreen> {
             },
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 22, 16, 24),
-              children: [
-                // Welcome Banner
-                _WelcomeBanner(studentName: widget.studentName)
-                    .animate()
-                    .fadeIn(duration: 400.ms)
-                    .slideY(begin: 0.12, end: 0),
-
-                const SizedBox(height: 28),
-
-                // Recent Activity placeholder cards
-                _SectionLabel('Overview')
-                    .animate(delay: 100.ms)
-                    .fadeIn(duration: 380.ms),
-                const SizedBox(height: 12),
-                _OverviewCards()
-                    .animate(delay: 150.ms)
-                    .fadeIn(duration: 380.ms)
-                    .slideY(begin: 0.08, end: 0),
-
-                const SizedBox(height: 28),
-
-                // NSCT hint card
-                _NsctHintCard(
-                  onTap: () {
-                    _scaffoldKey.currentState?.openDrawer();
-                    HapticFeedback.lightImpact();
-                  },
-                ).animate(delay: 220.ms).fadeIn(duration: 380.ms).slideY(begin: 0.08, end: 0),
-              ],
+            child: _QuizCodeEntryPage(
+              studentId: widget.studentId,
+              studentName: widget.studentName,
+              rollNo: widget.rollNo,
             ),
           ),
         ],
       ),
-      bottomNavigationBar: _BottomNav(
-        selected: _tab,
-        onTap: (i) {
-          setState(() => _tab = i);
-          HapticFeedback.selectionClick();
-        },
+      bottomNavigationBar: null,
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// QUIZ CODE ENTRY PAGE — student quiz code enter karta hai
+// ══════════════════════════════════════════════════════════════════
+class _QuizCodeEntryPage extends StatefulWidget {
+  final int studentId;
+  final String studentName;
+  final String? rollNo;
+  const _QuizCodeEntryPage({
+    required this.studentId,
+    required this.studentName,
+    required this.rollNo,
+  });
+  @override
+  State<_QuizCodeEntryPage> createState() => _QuizCodeEntryPageState();
+}
+
+class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
+  final _codeCtrl = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _joinQuiz() async {
+    final code = _codeCtrl.text.trim().toUpperCase();
+    if (code.isEmpty) {
+      _snack('Please enter a quiz code');
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setState(() => _loading = true);
+
+    if (mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => QuizViewScreen(
+            quizCode: code,
+            quizName: 'Quiz',
+          ),
+        ),
+      );
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+          style: GoogleFonts.outfit(fontSize: 13, color: Colors.white)),
+      backgroundColor: AppTheme.text1,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 3),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ── Icon ────────────────────────────────────────────────
+          Container(
+            width: 80, height: 80,
+            decoration: BoxDecoration(
+              gradient: AppTheme.heroGrad,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: AppTheme.glowShadow(AppTheme.primary),
+            ),
+            child: const Icon(Icons.quiz_rounded,
+                color: Colors.white, size: 38),
+          )
+              .animate()
+              .scaleXY(begin: 0.6, end: 1.0,
+              duration: 550.ms, curve: Curves.elasticOut)
+              .fadeIn(duration: 400.ms),
+
+          const SizedBox(height: 20),
+
+          Text(
+            'Join a Quiz',
+            style: GoogleFonts.outfit(
+              fontSize: 24, fontWeight: FontWeight.w800,
+              color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+              letterSpacing: -0.5,
+            ),
+          )
+              .animate(delay: 100.ms)
+              .fadeIn(duration: 400.ms)
+              .slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: 6),
+
+          Text(
+            'Enter the quiz code provided by your teacher',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+            ),
+          ).animate(delay: 160.ms).fadeIn(duration: 400.ms),
+
+          const SizedBox(height: 36),
+
+          // ── Code Input Card ──────────────────────────────────────
+          Container(
+            decoration: AppTheme.themedCard(context, radius: 16),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quiz Code',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _codeCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    fontSize: 22, fontWeight: FontWeight.w800,
+                    color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                    letterSpacing: 6,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'ABC123',
+                    hintStyle: GoogleFonts.outfit(
+                      fontSize: 22, fontWeight: FontWeight.w800,
+                      color: isDark ? AppTheme.darkText4 : AppTheme.text4,
+                      letterSpacing: 6,
+                    ),
+                    filled: true,
+                    fillColor: isDark
+                        ? AppTheme.darkInput
+                        : AppTheme.primaryBg.withOpacity(0.5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: isDark
+                              ? AppTheme.darkBorder
+                              : AppTheme.border,
+                          width: 1.2),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: isDark
+                              ? AppTheme.darkBorder
+                              : AppTheme.border,
+                          width: 1.2),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: isDark
+                              ? const Color(0xFF42A5F5)
+                              : AppTheme.primary,
+                          width: 2),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 16),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Icon(Icons.tag_rounded,
+                          size: 20,
+                          color: isDark
+                              ? AppTheme.darkText4
+                              : AppTheme.text4),
+                    ),
+                    prefixIconConstraints:
+                    const BoxConstraints(minWidth: 50, minHeight: 50),
+                  ),
+                  onSubmitted: (_) => _joinQuiz(),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Join Button ──────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: _loading ? null : _joinQuiz,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          gradient: _loading ? null : AppTheme.heroGrad,
+                          color: _loading
+                              ? (isDark
+                              ? AppTheme.darkInput
+                              : AppTheme.bg)
+                              : null,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: _loading
+                              ? null
+                              : AppTheme.glowShadow(AppTheme.primary),
+                        ),
+                        child: Center(
+                          child: _loading
+                              ? const SizedBox(
+                            width: 22, height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation(
+                                  AppTheme.primary),
+                            ),
+                          )
+                              : Row(
+                            mainAxisAlignment:
+                            MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Join Quiz',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(
+                                  Icons.arrow_forward_rounded,
+                                  color: Colors.white, size: 18),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+              .animate(delay: 240.ms)
+              .fadeIn(duration: 450.ms)
+              .slideY(begin: 0.1, end: 0),
+
+          const SizedBox(height: 24),
+
+          // ── Student info chip ────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppTheme.primary.withOpacity(0.10)
+                  : AppTheme.primaryBg,
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(
+                  color: AppTheme.primary.withOpacity(0.20), width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.person_rounded,
+                    size: 14, color: AppTheme.primary),
+                const SizedBox(width: 7),
+                Text(
+                  widget.studentName,
+                  style: GoogleFonts.outfit(
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: AppTheme.primary,
+                  ),
+                ),
+                if (widget.rollNo != null) ...[
+                  Container(
+                    width: 1, height: 12,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    color: AppTheme.primary.withOpacity(0.3),
+                  ),
+                  Text(
+                    widget.rollNo!,
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      color: AppTheme.primary.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ).animate(delay: 350.ms).fadeIn(duration: 400.ms),
+        ],
       ),
     );
   }

@@ -76,7 +76,8 @@ class QuizViewController extends ChangeNotifier {
     error = null;
     notifyListeners();
 
-    final result = await _service.fetchQuizByCode(code);
+    // Teacher endpoint — saare questions
+    final result = await _service.fetchQuizByCodeTeacher(code);
 
     if (result['success'] == true) {
       quiz  = result['data'] as FullQuiz;

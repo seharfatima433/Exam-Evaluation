@@ -221,7 +221,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
       _snack('Select a date', error: true);
       return;
     }
-    if (!_isPoll && _cats.isEmpty) {
+    if (_cats.isEmpty) {
       _snack('Select at least one question type', error: true);
       return;
     }
@@ -229,10 +229,34 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
     HapticFeedback.mediumImpact();
     _startTimer();
 
-    // Poll: always 100 MCQs regardless of slider setting
+    // Poll logic:
+    //   MCQs  → hamesha 100 fixed (locked)
+    //   Short/Fill (jo bhi selected ho) → _numQuestions ko unme evenly divide karo
+    //     e.g. slider=10, Short+Fill both → short=5, fill=5
+    //     e.g. slider=7,  sirf Short     → short=7
+    //     e.g. slider=7,  Short+Fill     → short=4, fill=3
+    // Normal quiz → _perTypeCount() se distribute (same as before)
     final Map<String, dynamic> categoriesPayload;
     if (_isPoll) {
-      categoriesPayload = {'mcqs': 100};
+      // Leftover types (short + fill jo selected hain)
+      final leftover = _cats
+          .where((t) => t != 'mcqs')
+          .toList();
+
+      final Map<String, int> leftoverCounts = {};
+      if (leftover.isNotEmpty) {
+        final n = leftover.length;
+        final base = _numQuestions ~/ n;
+        final extra = _numQuestions % n;
+        for (int i = 0; i < n; i++) {
+          leftoverCounts[leftover[i]] = base + (i < extra ? 1 : 0);
+        }
+      }
+
+      categoriesPayload = {
+        'mcqs': 100,              // hamesha 100
+        ...leftoverCounts,        // short/fill — slider se divide
+      };
     } else {
       final counts = _perTypeCount();
       categoriesPayload = {
@@ -518,14 +542,13 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                       icon: Icons.calendar_today_rounded,
                       child: Row(
                         children: [
-                          Expanded(child: _datePicker(enabled: !generating && !saving)),
+                          Expanded(child: _datePicker()),
                           SizedBox(width: isSmall ? 5 : 7),
                           Expanded(
                             child: _timePicker(
                               'Start',
                               _startTime,
                                   (t) => setState(() => _startTime = t),
-                              enabled: !generating && !saving,
                             ),
                           ),
                           SizedBox(width: isSmall ? 5 : 7),
@@ -534,7 +557,6 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                               'End',
                               _endTime,
                                   (t) => setState(() => _endTime = t),
-                              enabled: !generating && !saving,
                             ),
                           ),
                         ],
@@ -608,11 +630,18 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                             }).toList(),
                           ),
                           const SizedBox(height: 14),
+                          // Poll mein: slider Short/Fill ke liye (MCQs 100 fixed)
+                          // Normal mein: slider sab types ke liye
                           AnimatedOpacity(
                             duration: const Duration(milliseconds: 250),
-                            opacity: _isPoll ? 0.40 : 1.0,
+                            // Poll mein slider sirf tab useful hai jab Short ya Fill selected ho
+                            opacity: (_isPoll && !_cats.any((t) => t != 'mcqs'))
+                                ? 0.35
+                                : 1.0,
                             child: IgnorePointer(
-                              ignoring: _isPoll || generating || saving,
+                              // Poll mein sirf MCQ selected hai to slider useless — disable
+                              ignoring: (_isPoll && !_cats.any((t) => t != 'mcqs'))
+                                  || generating || saving,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -621,7 +650,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                       Expanded(
                                         child: _label(
                                           _isPoll
-                                              ? 'Number of Questions (Poll: 100 MCQs)'
+                                              ? 'Short / Fill Questions Count'
                                               : 'Number of Questions',
                                         ),
                                       ),
@@ -633,26 +662,18 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _isPoll
-                                              ? AppTheme.violetBg
-                                              : AppTheme.primaryBg,
+                                          color: AppTheme.primaryBg,
                                           borderRadius: BorderRadius.circular(8),
                                           border: Border.all(
-                                            color: _isPoll
-                                                ? AppTheme.violet.withOpacity(0.35)
-                                                : AppTheme.primary.withOpacity(
-                                              0.25,
-                                            ),
+                                            color: AppTheme.primary.withOpacity(0.25),
                                           ),
                                         ),
                                         child: Text(
-                                          _isPoll ? '100' : '$_numQuestions',
-                                          style: TextStyle(
+                                          '$_numQuestions',
+                                          style: const TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w700,
-                                            color: _isPoll
-                                                ? AppTheme.violet
-                                                : AppTheme.primary,
+                                            color: AppTheme.primary,
                                           ),
                                         ),
                                       ),
@@ -670,9 +691,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                       activeTrackColor: AppTheme.primary,
                                       inactiveTrackColor: AppTheme.border,
                                       thumbColor: AppTheme.primary,
-                                      overlayColor: AppTheme.primary.withOpacity(
-                                        0.12,
-                                      ),
+                                      overlayColor: AppTheme.primary.withOpacity(0.12),
                                     ),
                                     child: Slider(
                                       value: _numQuestions.toDouble(),
@@ -681,8 +700,8 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                       divisions: 19,
                                       onChanged: (generating || saving)
                                           ? null
-                                          : (v) =>
-                                          setState(() => _numQuestions = v.round()),
+                                          : (v) => setState(
+                                              () => _numQuestions = v.round()),
                                     ),
                                   ),
                                 ],
@@ -690,7 +709,85 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                             ),
                           ),
                           // ── Per-type breakdown hint ────────────────────
-                          if (_cats.length > 1) ...[
+                          if (_isPoll) ...[
+                            // Poll: MCQs 100 fixed pill + leftover counts
+                            const SizedBox(height: 6),
+                            Builder(builder: (_) {
+                              final leftover = _cats.where((t) => t != 'mcqs').toList();
+                              final n = leftover.length;
+                              final labels = {
+                                'short_questions': 'Short',
+                                'fill_blanks': 'Fill',
+                              };
+                              final leftoverCounts = <String, int>{};
+                              if (n > 0) {
+                                final base = _numQuestions ~/ n;
+                                final extra = _numQuestions % n;
+                                for (int i = 0; i < n; i++) {
+                                  leftoverCounts[leftover[i]] =
+                                      base + (i < extra ? 1 : 0);
+                                }
+                              }
+                              return Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  // MCQs 100 fixed pill
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 9, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryBg,
+                                      borderRadius: BorderRadius.circular(50),
+                                      border: Border.all(
+                                          color: AppTheme.primary.withOpacity(0.3),
+                                          width: 1.2),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.lock_rounded,
+                                            size: 9, color: AppTheme.primary),
+                                        const SizedBox(width: 4),
+                                        Text('100 MCQ',
+                                            style: const TextStyle(
+                                                fontSize: 11,
+                                                color: AppTheme.primary,
+                                                fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
+                                  // Short/Fill pills
+                                  ...leftoverCounts.entries.map((e) =>
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 9, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.bg,
+                                          borderRadius:
+                                          BorderRadius.circular(50),
+                                          border: Border.all(
+                                              color: AppTheme.border,
+                                              width: 1.2),
+                                        ),
+                                        child: Text(
+                                          '${e.value} ${labels[e.key] ?? e.key}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                                ? AppTheme.darkText3
+                                                : AppTheme.text3,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      )),
+                                ],
+                              );
+                            }),
+                            const SizedBox(height: 4),
+                          ] else if (_cats.length > 1) ...[
+                            // Normal quiz: sab types ka breakdown
                             const SizedBox(height: 2),
                             Builder(
                               builder: (_) {
@@ -707,23 +804,21 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                       .map(
                                         (e) => Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 9,
-                                        vertical: 4,
-                                      ),
+                                          horizontal: 9, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: AppTheme.bg,
-                                        borderRadius: BorderRadius.circular(50),
+                                        borderRadius:
+                                        BorderRadius.circular(50),
                                         border: Border.all(
-                                          color: AppTheme.border,
-                                          width: 1.2,
-                                        ),
+                                            color: AppTheme.border,
+                                            width: 1.2),
                                       ),
                                       child: Text(
                                         '${e.value} ${labels[e.key] ?? e.key}',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color:
-                                          Theme.of(context).brightness ==
+                                          color: Theme.of(context)
+                                              .brightness ==
                                               Brightness.dark
                                               ? AppTheme.darkText3
                                               : AppTheme.text3,
@@ -748,10 +843,8 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                               setState(() {
                                 _isPoll = val;
                                 if (val) {
-                                  // Poll mode: lock to MCQs only
-                                  _cats
-                                    ..clear()
-                                    ..add('mcqs');
+                                  // Poll ON: MCQs hamesha selected rehni chahiye
+                                  _cats.add('mcqs');
                                 }
                               });
                               HapticFeedback.selectionClick();
@@ -760,52 +853,55 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                           const SizedBox(height: 14),
                           _label(
                             _isPoll
-                                ? 'Question Types (Poll mode — MCQs only)'
+                                ? 'Question Types (MCQs: 100 fixed)'
                                 : 'Question Types *',
                           ),
                           const SizedBox(height: 8),
-                          AnimatedOpacity(
-                            duration: const Duration(milliseconds: 250),
-                            opacity: _isPoll ? 0.40 : 1.0,
-                            child: IgnorePointer(
-                              ignoring: _isPoll || generating || saving,
-                              child: Wrap(
-                                spacing: 7,
-                                runSpacing: 7,
-                                children:
-                                [
-                                  (
-                                  'mcqs',
-                                  'MCQs',
-                                  AppTheme.primary,
-                                  AppTheme.primaryBg,
+                          IgnorePointer(
+                            ignoring: generating || saving,
+                            child: Wrap(
+                              spacing: 7,
+                              runSpacing: 7,
+                              children: [
+                                // ── MCQs chip ─────────────────────────────
+                                // Poll mein: always selected + disabled
+                                // Normal mein: freely toggleable
+                                (
+                                'mcqs',
+                                _isPoll ? 'MCQs (100 fixed)' : 'MCQs',
+                                AppTheme.primary,
+                                AppTheme.primaryBg,
+                                ),
+                                (
+                                'short_questions',
+                                'Short Answer',
+                                AppTheme.green,
+                                AppTheme.greenBg,
+                                ),
+                                (
+                                'fill_blanks',
+                                'Fill Blanks',
+                                AppTheme.violet,
+                                AppTheme.violetBg,
+                                ),
+                              ].map((c) {
+                                final isMcq = c.$1 == 'mcqs';
+                                final sel = _cats.contains(c.$1);
+                                // Poll mein MCQs hamesha selected + non-tappable
+                                final isLockedInPoll = _isPoll && isMcq;
+                                return GestureDetector(
+                                  onTap: (generating || saving || isLockedInPoll)
+                                      ? null
+                                      : () => setState(
+                                        () => sel
+                                        ? _cats.remove(c.$1)
+                                        : _cats.add(c.$1),
                                   ),
-                                  (
-                                  'short_questions',
-                                  'Short Answer',
-                                  AppTheme.green,
-                                  AppTheme.greenBg,
-                                  ),
-                                  (
-                                  'fill_blanks',
-                                  'Fill Blanks',
-                                  AppTheme.violet,
-                                  AppTheme.violetBg,
-                                  ),
-                                ].map((c) {
-                                  final sel = _cats.contains(c.$1);
-                                  return GestureDetector(
-                                    onTap: (generating || saving)
-                                        ? null
-                                        : () => setState(
-                                          () => sel
-                                          ? _cats.remove(c.$1)
-                                          : _cats.add(c.$1),
-                                    ),
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 200),
+                                    opacity: isLockedInPoll ? 0.60 : 1.0,
                                     child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 180,
-                                      ),
+                                      duration: const Duration(milliseconds: 180),
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 12,
                                         vertical: 7,
@@ -833,7 +929,9 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                         children: [
                                           if (sel) ...[
                                             Icon(
-                                              Icons.check_rounded,
+                                              isLockedInPoll
+                                                  ? Icons.lock_rounded
+                                                  : Icons.check_rounded,
                                               size: 12,
                                               color: c.$3,
                                             ),
@@ -848,9 +946,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                                   : FontWeight.w400,
                                               color: sel
                                                   ? c.$3
-                                                  : (Theme.of(
-                                                context,
-                                              ).brightness ==
+                                                  : (Theme.of(context).brightness ==
                                                   Brightness.dark
                                                   ? AppTheme.darkText3
                                                   : AppTheme.text3),
@@ -859,9 +955,9 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                         ],
                                       ),
                                     ),
-                                  );
-                                }).toList(),
-                              ),
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           ),
                         ],
@@ -990,7 +1086,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                       borderRadius: BorderRadius.circular(50),
                                     ),
                                     child: Text(
-                                      '100 MCQs',
+                                      '100 Qs',
                                       style: TextStyle(
                                         fontSize: isSmall ? 9 : 10,
                                         fontWeight: FontWeight.w700,
@@ -1243,8 +1339,8 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
         ),
       );
 
-  Widget _datePicker({bool enabled = true}) => GestureDetector(
-    onTap: !enabled ? null : () async {
+  Widget _datePicker() => GestureDetector(
+    onTap: () async {
       final d = await showDatePicker(
         context: context,
         initialDate: DateTime.now().add(const Duration(days: 1)),
@@ -1256,17 +1352,15 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
     child: _pickerBox(
       Icons.calendar_today_rounded,
       _date != null ? '${_date!.day}/${_date!.month}/${_date!.year}' : 'Date *',
-      enabled: enabled,
     ),
   );
 
   Widget _timePicker(
       String label,
       TimeOfDay? t,
-      void Function(TimeOfDay) onPick, {
-        bool enabled = true,
-      }) => GestureDetector(
-    onTap: !enabled ? null : () async {
+      void Function(TimeOfDay) onPick,
+      ) => GestureDetector(
+    onTap: () async {
       final p = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.now(),
@@ -1276,51 +1370,51 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
     child: _pickerBox(
       Icons.access_time_rounded,
       t != null ? t.format(context) : label,
-      enabled: enabled,
     ),
   );
 
-  Widget _pickerBox(IconData icon, String label, {bool enabled = true}) {
+  Widget _pickerBox(IconData icon, String label) {
     final isSmall = MediaQuery.of(context).size.width < 400;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 200),
-      opacity: enabled ? 1.0 : 0.45,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkInput : const Color(0xFFF5F7FF),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? AppTheme.darkBorder : AppTheme.border,
-            width: 1.2,
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? AppTheme.darkInput
+            : const Color(0xFFF5F7FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? AppTheme.darkBorder
+              : AppTheme.border,
+          width: 1.2,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: isSmall ? 10 : 12,
-              color: AppTheme.primary.withOpacity(enabled ? 0.6 : 0.3),
-            ),
-            SizedBox(width: isSmall ? 3 : 4),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  style: GoogleFonts.outfit(
-                    fontSize: isSmall ? 10 : 11,
-                    color: isDark ? AppTheme.darkText3 : AppTheme.text3,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: isSmall ? 10 : 12,
+            color: AppTheme.primary.withOpacity(0.6),
+          ),
+          SizedBox(width: isSmall ? 3 : 4),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: GoogleFonts.outfit(
+                  fontSize: isSmall ? 10 : 11,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.darkText3
+                      : AppTheme.text3,
+                  fontWeight: FontWeight.w500,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -2005,8 +2099,7 @@ class _ReferenceQuestionCardState extends State<_ReferenceQuestionCard> {
 
   Widget _mcqPreview() {
     final opts = _opts();
-    // correct_answer is stored as letter (A/B/C/D)
-    final correct = _answer.toUpperCase();
+    final correct = _answer;
     final labels = ['A', 'B', 'C', 'D'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2016,7 +2109,7 @@ class _ReferenceQuestionCardState extends State<_ReferenceQuestionCard> {
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: AppTheme.darkText3,
+            color: AppTheme.darkText3, // darkText3 is neutral grey
             letterSpacing: 0.8,
           ),
         ),
@@ -2024,8 +2117,7 @@ class _ReferenceQuestionCardState extends State<_ReferenceQuestionCard> {
         ...opts.asMap().entries.map((e) {
           final label = e.key < labels.length ? labels[e.key] : '?';
           final text = e.value?.toString() ?? '';
-          // Compare letter to letter — correct_answer is "A"/"B"/"C"/"D"
-          final isC = label == correct;
+          final isC = text.isNotEmpty && text == correct;
           return Container(
             margin: const EdgeInsets.only(bottom: 5),
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
@@ -2544,7 +2636,7 @@ class _PollToggleTile extends StatelessWidget {
                   ),
                   child: Text(
                     isPoll
-                        ? 'Generates 100 MCQs • MCQ-only mode locked'
+                        ? 'MCQs: 100 fixed • Short/Fill: slider value'
                         : 'Tap to generate a 100-question poll instead',
                   ),
                 ),
@@ -3202,8 +3294,7 @@ class _ReviewQuestionCardState extends State<_ReviewQuestionCard> {
 
   Widget _mcqAnswer() {
     final opts = _opts();
-    // correct_answer is stored as letter (A/B/C/D)
-    final correct = _answer.toUpperCase();
+    final correct = _answer;
     final labels = ['A', 'B', 'C', 'D'];
     if (opts.isEmpty) return _noAnswer();
     return Column(
@@ -3222,8 +3313,7 @@ class _ReviewQuestionCardState extends State<_ReviewQuestionCard> {
         ...opts.asMap().entries.map((e) {
           final label = e.key < labels.length ? labels[e.key] : '?';
           final text = e.value?.toString() ?? '';
-          // Compare letter to letter — correct_answer is "A"/"B"/"C"/"D"
-          final isC = label == correct;
+          final isC = text.isNotEmpty && text == correct;
           return Container(
             margin: const EdgeInsets.only(bottom: 5),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

@@ -58,6 +58,7 @@ class _TeacherScreenState extends State<TeacherScreen>
             subtitle: 'My Courses',
             initials: _initials,
             showThemeToggle: true,
+            showLogout: true,
             actionIcon: Icons.refresh_rounded,
             onActionTap: () => _ctrl.fetchTeacherCourses(widget.teacherId),
           ),
@@ -179,7 +180,7 @@ class _TeacherScreenState extends State<TeacherScreen>
         const SizedBox(width: 9),
         Container(
           padding:
-              const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+          const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
           decoration: BoxDecoration(
               color: Theme.of(context).brightness == Brightness.dark
                   ? AppTheme.primary.withOpacity(0.15)
@@ -465,24 +466,24 @@ class _ActionBtnState extends State<_ActionBtn>
             color: widget.primary
                 ? null
                 : (Theme.of(context).brightness == Brightness.dark
-                    ? AppTheme.darkInput
-                    : AppTheme.bg),
+                ? AppTheme.darkInput
+                : AppTheme.bg),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: widget.primary
                   ? Colors.transparent
                   : (Theme.of(context).brightness == Brightness.dark
-                      ? AppTheme.darkBorder
-                      : AppTheme.border),
+                  ? AppTheme.darkBorder
+                  : AppTheme.border),
               width: 1.2,
             ),
             boxShadow: widget.primary
                 ? [
-                    BoxShadow(
-                      color: widget.color.withOpacity(0.30),
-                      blurRadius: 12, offset: const Offset(0, 4),
-                    )
-                  ]
+              BoxShadow(
+                color: widget.color.withOpacity(0.30),
+                blurRadius: 12, offset: const Offset(0, 4),
+              )
+            ]
                 : null,
           ),
           child: Row(
@@ -492,8 +493,8 @@ class _ActionBtnState extends State<_ActionBtn>
                   color: widget.primary
                       ? Colors.white
                       : (Theme.of(context).brightness == Brightness.dark
-                          ? AppTheme.darkText3
-                          : AppTheme.text3)),
+                      ? AppTheme.darkText3
+                      : AppTheme.text3)),
               const SizedBox(width: 5),
               Flexible(
                 child: Text(widget.label,
@@ -502,8 +503,8 @@ class _ActionBtnState extends State<_ActionBtn>
                         color: widget.primary
                             ? Colors.white
                             : (Theme.of(context).brightness == Brightness.dark
-                                ? AppTheme.darkText2
-                                : AppTheme.text2),
+                            ? AppTheme.darkText2
+                            : AppTheme.text2),
                         letterSpacing: 0.1),
                     overflow: TextOverflow.ellipsis),
               ),
@@ -522,30 +523,30 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72, height: 72,
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGrad,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: AppTheme.glowShadow(AppTheme.primary,
-                    intensity: 0.5),
-              ),
-              child: const Icon(Icons.inbox_rounded,
-                  size: 32, color: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            Text(message,
-                style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppTheme.darkText3
-                        : AppTheme.text3)),
-          ],
-        ).animate().fadeIn(duration: 400.ms).scaleXY(begin: 0.92, end: 1),
-      );
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 72, height: 72,
+          decoration: BoxDecoration(
+            gradient: AppTheme.primaryGrad,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: AppTheme.glowShadow(AppTheme.primary,
+                intensity: 0.5),
+          ),
+          child: const Icon(Icons.inbox_rounded,
+              size: 32, color: Colors.white),
+        ),
+        const SizedBox(height: 16),
+        Text(message,
+            style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppTheme.darkText3
+                    : AppTheme.text3)),
+      ],
+    ).animate().fadeIn(duration: 400.ms).scaleXY(begin: 0.92, end: 1),
+  );
 }
 
 class _ErrorState extends StatelessWidget {
@@ -555,44 +556,44 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72, height: 72,
-                decoration: BoxDecoration(
-                    color: AppTheme.redBg,
-                    borderRadius: BorderRadius.circular(20)),
-                child: const Icon(Icons.wifi_off_rounded,
-                    size: 30, color: AppTheme.red),
-              ),
-              const SizedBox(height: 16),
-              Text(message,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? AppTheme.darkText3
-                          : AppTheme.text3)),
-              const SizedBox(height: 22),
-              ElevatedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 15),
-                label: Text('Try Again',
-                    style: GoogleFonts.outfit(fontSize: 13)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 22, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ],
-          ).animate().fadeIn(duration: 400.ms),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72, height: 72,
+            decoration: BoxDecoration(
+                color: AppTheme.redBg,
+                borderRadius: BorderRadius.circular(20)),
+            child: const Icon(Icons.wifi_off_rounded,
+                size: 30, color: AppTheme.red),
+          ),
+          const SizedBox(height: 16),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.darkText3
+                      : AppTheme.text3)),
+          const SizedBox(height: 22),
+          ElevatedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 15),
+            label: Text('Try Again',
+                style: GoogleFonts.outfit(fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 22, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ).animate().fadeIn(duration: 400.ms),
+    ),
+  );
 }

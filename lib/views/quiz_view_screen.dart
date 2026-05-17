@@ -139,7 +139,7 @@ class _QuizViewScreenState extends State<QuizViewScreen>
           const SizedBox(height: 10),
           ...List.generate(
             mcqs.length,
-            (i) => Padding(
+                (i) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: _McqCard(q: mcqs[i], index: i + 1)
                   .animate(delay: (80 + i * 50).ms)
@@ -156,7 +156,7 @@ class _QuizViewScreenState extends State<QuizViewScreen>
           const SizedBox(height: 10),
           ...List.generate(
             shorts.length,
-            (i) => Padding(
+                (i) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: _ShortCard(q: shorts[i], index: i + 1)
                   .animate(delay: (80 + i * 50).ms)
@@ -173,7 +173,7 @@ class _QuizViewScreenState extends State<QuizViewScreen>
           const SizedBox(height: 10),
           ...List.generate(
             fills.length,
-            (i) => Padding(
+                (i) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: _FillCard(q: fills[i], index: i + 1)
                   .animate(delay: (80 + i * 50).ms)
@@ -227,6 +227,8 @@ class _InfoBar extends StatelessWidget {
                 Icons.help_outline_rounded,
                 '${quiz.questions.length} questions',
               ),
+              if (quiz.isPoll)
+                _InfoChip(Icons.poll_rounded, 'POLL'),
             ],
           ),
         ],
@@ -378,11 +380,11 @@ class _McqCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isCorrect
                         ? (Theme.of(context).brightness == Brightness.dark
-                            ? AppTheme.green.withOpacity(0.12)
-                            : AppTheme.greenBg)
+                        ? AppTheme.green.withOpacity(0.12)
+                        : AppTheme.greenBg)
                         : (Theme.of(context).brightness == Brightness.dark
-                            ? AppTheme.darkInput
-                            : AppTheme.surfaceAlt),
+                        ? AppTheme.darkInput
+                        : AppTheme.surfaceAlt),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: isCorrect
@@ -403,12 +405,12 @@ class _McqCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(7),
                           boxShadow: isCorrect
                               ? [
-                                  BoxShadow(
-                                      color: AppTheme.greenDark
-                                          .withOpacity(0.28),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2))
-                                ]
+                            BoxShadow(
+                                color: AppTheme.greenDark
+                                    .withOpacity(0.28),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2))
+                          ]
                               : null,
                         ),
                         child: Center(
@@ -427,11 +429,11 @@ class _McqCard extends StatelessWidget {
                                 fontSize: 12,
                                 color: isCorrect
                                     ? (Theme.of(context).brightness == Brightness.dark
-                                        ? AppTheme.green
-                                        : AppTheme.greenDark)
+                                    ? AppTheme.green
+                                    : AppTheme.greenDark)
                                     : (Theme.of(context).brightness == Brightness.dark
-                                        ? AppTheme.darkText2
-                                        : AppTheme.text2),
+                                    ? AppTheme.darkText2
+                                    : AppTheme.text2),
                                 fontWeight: isCorrect
                                     ? FontWeight.w600
                                     : FontWeight.w400)),
@@ -466,12 +468,43 @@ class _ShortCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: AppTheme.themedCard(context),
-        child: Row(
+    padding: const EdgeInsets.all(14),
+    decoration: AppTheme.themedCard(context),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _IndexBadge(index, AppTheme.greenGrad),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(q.question,
+              style: GoogleFonts.outfit(
+                  fontSize: 13, fontWeight: FontWeight.w600,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.darkText1
+                      : AppTheme.text1, height: 1.5)),
+        ),
+      ],
+    ),
+  );
+}
+
+// ── Fill Card ─────────────────────────────────────────────────────
+class _FillCard extends StatelessWidget {
+  final QuizQuestion q;
+  final int index;
+  const _FillCard({required this.q, required this.index});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: AppTheme.card(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _IndexBadge(index, AppTheme.greenGrad),
+            _IndexBadge(index, AppTheme.violetGrad),
             const SizedBox(width: 10),
             Expanded(
               child: Text(q.question,
@@ -483,70 +516,39 @@ class _ShortCard extends StatelessWidget {
             ),
           ],
         ),
-      );
-}
-
-// ── Fill Card ─────────────────────────────────────────────────────
-class _FillCard extends StatelessWidget {
-  final QuizQuestion q;
-  final int index;
-  const _FillCard({required this.q, required this.index});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: AppTheme.card(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _IndexBadge(index, AppTheme.violetGrad),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(q.question,
-                      style: GoogleFonts.outfit(
-                          fontSize: 13, fontWeight: FontWeight.w600,
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? AppTheme.darkText1
-                              : AppTheme.text1, height: 1.5)),
-                ),
-              ],
-            ),
-            if (q.correctAnswer != null) ...[
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.only(left: 34),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 11, vertical: 7),
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.violetGrad,
-                    borderRadius: BorderRadius.circular(9),
-                    boxShadow: AppTheme.glowShadow(AppTheme.violet,
-                        intensity: 0.4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_rounded,
-                          size: 12, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(q.correctAnswer!,
-                            style: GoogleFonts.outfit(
-                                fontSize: 12, fontWeight: FontWeight.w700,
-                                color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                ),
+        if (q.correctAnswer != null) ...[
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.only(left: 34),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 11, vertical: 7),
+              decoration: BoxDecoration(
+                gradient: AppTheme.violetGrad,
+                borderRadius: BorderRadius.circular(9),
+                boxShadow: AppTheme.glowShadow(AppTheme.violet,
+                    intensity: 0.4),
               ),
-            ],
-          ],
-        ),
-      );
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_rounded,
+                      size: 12, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(q.correctAnswer!,
+                        style: GoogleFonts.outfit(
+                            fontSize: 12, fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 // ── Index Badge ───────────────────────────────────────────────────
@@ -557,16 +559,16 @@ class _IndexBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 26, height: 26,
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Text('$index',
-              style: GoogleFonts.outfit(
-                  fontSize: 11, fontWeight: FontWeight.w800,
-                  color: Colors.white)),
-        ),
-      );
+    width: 26, height: 26,
+    decoration: BoxDecoration(
+      gradient: gradient,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Center(
+      child: Text('$index',
+          style: GoogleFonts.outfit(
+              fontSize: 11, fontWeight: FontWeight.w800,
+              color: Colors.white)),
+    ),
+  );
 }
