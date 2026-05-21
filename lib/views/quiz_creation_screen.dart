@@ -145,7 +145,10 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
   // ── Timer helpers ─────────────────────────────────────────────
   String _fmt24(TimeOfDay? t, String fb) {
     if (t == null) return fb;
-    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    // Send HH:MM:SS in 24-hour format so backend stores correctly
+    final h = t.hour.toString().padLeft(2, '0');
+    final m = t.minute.toString().padLeft(2, '0');
+    return '$h:$m:00';
   }
 
   String _fmtDate(DateTime d) =>
@@ -1363,13 +1366,23 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
     onTap: () async {
       final p = await showTimePicker(
         context: context,
-        initialTime: TimeOfDay.now(),
+        initialTime: t ?? TimeOfDay.now(),
+        builder: (context, child) {
+          // Force 24-hour format so 11 PM = 23, not 11
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+            child: child!,
+          );
+        },
       );
       if (p != null) onPick(p);
     },
     child: _pickerBox(
       Icons.access_time_rounded,
-      t != null ? t.format(context) : label,
+      // Display in 24hr format so teacher sees 23:00 not 11:00 PM
+      t != null
+          ? '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}'
+          : label,
     ),
   );
 

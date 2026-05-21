@@ -38,7 +38,7 @@ class TeacherService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       )
-          .timeout(ApiConstants.timeout);
+          .timeout(ApiConstants.quizTimeout);
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['status'] == true) {

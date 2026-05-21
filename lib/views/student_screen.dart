@@ -4,17 +4,20 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_theme.dart';
 import '../widgets/premium_app_bar.dart';
+import '../services/nsct_storage_service.dart';
 import 'quiz_view_screen.dart';
 
 // ── NSCT Syllabus Data ────────────────────────────────────────────
 class NsctSubject {
   final String name;
+  final String folderName;
   final String weightage;
   final IconData icon;
   final Color color;
   final List<String> topics;
   const NsctSubject({
     required this.name,
+    required this.folderName,
     required this.weightage,
     required this.icon,
     required this.color,
@@ -25,6 +28,7 @@ class NsctSubject {
 const List<NsctSubject> nsctSubjects = [
   NsctSubject(
     name: 'Computer Networks\n& Cloud Computing',
+    folderName: 'networks',
     weightage: '10%',
     icon: Icons.lan_rounded,
     color: Color(0xFF1565C0),
@@ -43,6 +47,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Programming\n(C++/Java/Python)',
+    folderName: 'programming',
     weightage: '10%',
     icon: Icons.code_rounded,
     color: Color(0xFFE65100),
@@ -67,6 +72,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Data Structures\n& Algorithms',
+    folderName: 'dsa',
     weightage: '10%',
     icon: Icons.account_tree_rounded,
     color: Color(0xFF6A1B9A),
@@ -87,6 +93,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Operating Systems',
+    folderName: 'os',
     weightage: '5%',
     icon: Icons.computer_rounded,
     color: Color(0xFF00695C),
@@ -107,6 +114,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Software Engineering',
+    folderName: 'software-engineering',
     weightage: '10%',
     icon: Icons.engineering_rounded,
     color: Color(0xFF37474F),
@@ -131,6 +139,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Web Development',
+    folderName: 'web-dev',
     weightage: '10%',
     icon: Icons.web_rounded,
     color: Color(0xFF00838F),
@@ -156,6 +165,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'AI / Machine Learning\n& Data Analytics',
+    folderName: 'ai-ml',
     weightage: '10%',
     icon: Icons.psychology_rounded,
     color: Color(0xFF558B2F),
@@ -181,6 +191,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Cyber Security',
+    folderName: 'cyber-security',
     weightage: '5%',
     icon: Icons.security_rounded,
     color: Color(0xFFB71C1C),
@@ -205,6 +216,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Databases',
+    folderName: 'databases',
     weightage: '10%',
     icon: Icons.storage_rounded,
     color: Color(0xFF4527A0),
@@ -230,6 +242,7 @@ const List<NsctSubject> nsctSubjects = [
   ),
   NsctSubject(
     name: 'Problem Solving &\nAnalytical Skills',
+    folderName: 'problem-solving',
     weightage: '20%',
     icon: Icons.lightbulb_rounded,
     color: Color(0xFFFF8F00),
@@ -318,7 +331,7 @@ class _StudentScreenState extends State<StudentScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// QUIZ CODE ENTRY PAGE — student quiz code enter karta hai
+// QUIZ CODE ENTRY PAGE
 // ══════════════════════════════════════════════════════════════════
 class _QuizCodeEntryPage extends StatefulWidget {
   final int studentId;
@@ -389,18 +402,21 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
         children: [
           // ── Icon ────────────────────────────────────────────────
           Container(
-            width: 80, height: 80,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               gradient: AppTheme.heroGrad,
               borderRadius: BorderRadius.circular(22),
               boxShadow: AppTheme.glowShadow(AppTheme.primary),
             ),
-            child: const Icon(Icons.quiz_rounded,
-                color: Colors.white, size: 38),
+            child: const Icon(Icons.quiz_rounded, color: Colors.white, size: 38),
           )
               .animate()
-              .scaleXY(begin: 0.6, end: 1.0,
-              duration: 550.ms, curve: Curves.elasticOut)
+              .scaleXY(
+              begin: 0.6,
+              end: 1.0,
+              duration: 550.ms,
+              curve: Curves.elasticOut)
               .fadeIn(duration: 400.ms),
 
           const SizedBox(height: 20),
@@ -408,7 +424,8 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
           Text(
             'Join a Quiz',
             style: GoogleFonts.outfit(
-              fontSize: 24, fontWeight: FontWeight.w800,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
               color: isDark ? AppTheme.darkText1 : AppTheme.text1,
               letterSpacing: -0.5,
             ),
@@ -440,7 +457,8 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                 Text(
                   'Quiz Code',
                   style: GoogleFonts.outfit(
-                    fontSize: 12, fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                     color: isDark ? AppTheme.darkText3 : AppTheme.text3,
                     letterSpacing: 0.2,
                   ),
@@ -451,14 +469,16 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                   textCapitalization: TextCapitalization.characters,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
-                    fontSize: 22, fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
                     color: isDark ? AppTheme.darkText1 : AppTheme.text1,
                     letterSpacing: 6,
                   ),
                   decoration: InputDecoration(
                     hintText: 'ABC123',
                     hintStyle: GoogleFonts.outfit(
-                      fontSize: 22, fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
                       color: isDark ? AppTheme.darkText4 : AppTheme.text4,
                       letterSpacing: 6,
                     ),
@@ -469,17 +489,13 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
-                          color: isDark
-                              ? AppTheme.darkBorder
-                              : AppTheme.border,
+                          color: isDark ? AppTheme.darkBorder : AppTheme.border,
                           width: 1.2),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
-                          color: isDark
-                              ? AppTheme.darkBorder
-                              : AppTheme.border,
+                          color: isDark ? AppTheme.darkBorder : AppTheme.border,
                           width: 1.2),
                     ),
                     focusedBorder: OutlineInputBorder(
@@ -496,9 +512,8 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Icon(Icons.tag_rounded,
                           size: 20,
-                          color: isDark
-                              ? AppTheme.darkText4
-                              : AppTheme.text4),
+                          color:
+                          isDark ? AppTheme.darkText4 : AppTheme.text4),
                     ),
                     prefixIconConstraints:
                     const BoxConstraints(minWidth: 50, minHeight: 50),
@@ -521,9 +536,7 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                         decoration: BoxDecoration(
                           gradient: _loading ? null : AppTheme.heroGrad,
                           color: _loading
-                              ? (isDark
-                              ? AppTheme.darkInput
-                              : AppTheme.bg)
+                              ? (isDark ? AppTheme.darkInput : AppTheme.bg)
                               : null,
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: _loading
@@ -533,7 +546,8 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                         child: Center(
                           child: _loading
                               ? const SizedBox(
-                            width: 22, height: 22,
+                            width: 22,
+                            height: 22,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
                               valueColor: AlwaysStoppedAnimation(
@@ -541,8 +555,7 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                             ),
                           )
                               : Row(
-                            mainAxisAlignment:
-                            MainAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 'Join Quiz',
@@ -554,8 +567,7 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              const Icon(
-                                  Icons.arrow_forward_rounded,
+                              const Icon(Icons.arrow_forward_rounded,
                                   color: Colors.white, size: 18),
                             ],
                           ),
@@ -575,8 +587,8 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
 
           // ── Student info chip ────────────────────────────────────
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 9),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
               color: isDark
                   ? AppTheme.primary.withOpacity(0.10)
@@ -594,13 +606,15 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
                 Text(
                   widget.studentName,
                   style: GoogleFonts.outfit(
-                    fontSize: 12, fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.primary,
                   ),
                 ),
                 if (widget.rollNo != null) ...[
                   Container(
-                    width: 1, height: 12,
+                    width: 1,
+                    height: 12,
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     color: AppTheme.primary.withOpacity(0.3),
                   ),
@@ -700,7 +714,7 @@ class _StudentDrawer extends StatelessWidget {
             subtitle: 'Syllabus & Preparation',
             color: AppTheme.primary,
             onTap: () {
-              Navigator.pop(context); // close drawer
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const NsctScreen()),
@@ -724,7 +738,8 @@ class _StudentDrawer extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.verified_rounded, size: 14, color: AppTheme.primary),
+                Icon(Icons.verified_rounded,
+                    size: 14, color: AppTheme.primary),
                 const SizedBox(width: 8),
                 Text(
                   'NSCT Preparation App',
@@ -769,7 +784,8 @@ class _DrawerTile extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: color.withOpacity(0.07),
             borderRadius: BorderRadius.circular(14),
@@ -803,7 +819,9 @@ class _DrawerTile extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                        color: isDark
+                            ? AppTheme.darkText1
+                            : AppTheme.text1,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -811,7 +829,9 @@ class _DrawerTile extends StatelessWidget {
                       subtitle,
                       style: GoogleFonts.outfit(
                         fontSize: 11,
-                        color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                        color: isDark
+                            ? AppTheme.darkText3
+                            : AppTheme.text3,
                       ),
                     ),
                   ],
@@ -961,7 +981,8 @@ class NsctScreen extends StatelessWidget {
                   title: 'Syllabus',
                   description:
                   'Browse all ${nsctSubjects.length} subject areas with full topic breakdowns and weightages.',
-                  badgeText: '${nsctSubjects.fold(0, (s, e) => s + e.topics.length)} Topics',
+                  badgeText:
+                  '${nsctSubjects.fold(0, (s, e) => s + e.topics.length)} Topics',
                   gradient: AppTheme.primaryGrad,
                   accentColor: AppTheme.primary,
                   onTap: () {
@@ -972,7 +993,10 @@ class NsctScreen extends StatelessWidget {
                           builder: (_) => const NsctSyllabusScreen()),
                     );
                   },
-                ).animate(delay: 130.ms).fadeIn(duration: 380.ms).slideY(begin: 0.10, end: 0),
+                )
+                    .animate(delay: 130.ms)
+                    .fadeIn(duration: 380.ms)
+                    .slideY(begin: 0.10, end: 0),
 
                 const SizedBox(height: 14),
 
@@ -993,7 +1017,10 @@ class NsctScreen extends StatelessWidget {
                           builder: (_) => const NsctMaterialScreen()),
                     );
                   },
-                ).animate(delay: 200.ms).fadeIn(duration: 380.ms).slideY(begin: 0.10, end: 0),
+                )
+                    .animate(delay: 200.ms)
+                    .fadeIn(duration: 380.ms)
+                    .slideY(begin: 0.10, end: 0),
               ],
             ),
           ),
@@ -1003,7 +1030,7 @@ class NsctScreen extends StatelessWidget {
   }
 }
 
-// Option card widget used in NsctScreen
+// ── Option card widget used in NsctScreen ────────────────────────
 class _NsctOptionCard extends StatefulWidget {
   final IconData icon;
   final String title;
@@ -1104,7 +1131,9 @@ class _NsctOptionCardState extends State<_NsctOptionCard>
                             style: GoogleFonts.outfit(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                              color: isDark
+                                  ? AppTheme.darkText1
+                                  : AppTheme.text1,
                               letterSpacing: -0.2,
                             ),
                             maxLines: 1,
@@ -1135,7 +1164,9 @@ class _NsctOptionCardState extends State<_NsctOptionCard>
                       widget.description,
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                        color: isDark
+                            ? AppTheme.darkText3
+                            : AppTheme.text3,
                         height: 1.4,
                       ),
                     ),
@@ -1255,7 +1286,8 @@ class _NsctSyllabusScreenState extends State<NsctSyllabusScreen> {
           // ── Subject List ─────────────────────────────────────────
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              padding: const EdgeInsets.symmetric(
+                  vertical: 10, horizontal: 12),
               itemCount: nsctSubjects.length,
               itemBuilder: (context, index) {
                 final subject = nsctSubjects[index];
@@ -1301,7 +1333,8 @@ class _NsctSyllabusScreenState extends State<NsctSyllabusScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     subject.name.replaceAll('\n', ' '),
@@ -1318,11 +1351,13 @@ class _NsctSyllabusScreenState extends State<NsctSyllabusScreen> {
                                   Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
+                                        padding:
+                                        const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2),
                                         decoration: BoxDecoration(
-                                          color:
-                                          subject.color.withOpacity(0.12),
+                                          color: subject.color
+                                              .withOpacity(0.12),
                                           borderRadius:
                                           BorderRadius.circular(4),
                                         ),
@@ -1352,11 +1387,14 @@ class _NsctSyllabusScreenState extends State<NsctSyllabusScreen> {
                             ),
                             AnimatedRotation(
                               turns: isExpanded ? 0.5 : 0,
-                              duration: const Duration(milliseconds: 200),
+                              duration:
+                              const Duration(milliseconds: 200),
                               child: Icon(
                                 Icons.keyboard_arrow_down_rounded,
                                 size: 20,
-                                color: isExpanded ? subject.color : AppTheme.text4,
+                                color: isExpanded
+                                    ? subject.color
+                                    : AppTheme.text4,
                               ),
                             ),
                           ],
@@ -1375,8 +1413,8 @@ class _NsctSyllabusScreenState extends State<NsctSyllabusScreen> {
                         child: Column(
                           children: subject.topics.map((topic) {
                             return Padding(
-                              padding:
-                              const EdgeInsets.symmetric(vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 5),
                               child: Row(
                                 children: [
                                   Container(
@@ -1412,7 +1450,9 @@ class _NsctSyllabusScreenState extends State<NsctSyllabusScreen> {
                         height: 1,
                         indent: 16,
                         endIndent: 16,
-                        color: isDark ? AppTheme.darkDivider : AppTheme.divider,
+                        color: isDark
+                            ? AppTheme.darkDivider
+                            : AppTheme.divider,
                       ),
                   ],
                 );
@@ -1426,7 +1466,7 @@ class _NsctSyllabusScreenState extends State<NsctSyllabusScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// NSCT MATERIAL SCREEN  — preparation resources by subject
+// NSCT MATERIAL SCREEN  — Supabase-powered live resources
 // ══════════════════════════════════════════════════════════════════
 class NsctMaterialScreen extends StatefulWidget {
   const NsctMaterialScreen({super.key});
@@ -1434,60 +1474,29 @@ class NsctMaterialScreen extends StatefulWidget {
   State<NsctMaterialScreen> createState() => _NsctMaterialScreenState();
 }
 
-class _NsctMaterialScreenState extends State<NsctMaterialScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    super.dispose();
-  }
-
+class _NsctMaterialScreenState extends State<NsctMaterialScreen> {
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          // ── Animated Header ──────────────────────────────────────
-          AnimatedBuilder(
-            animation: _pulseAnim,
-            builder: (context, child) {
-              final t = _pulseAnim.value;
-              return Container(
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 14,
-                  bottom: 24,
-                  left: 16,
-                  right: 16,
-                ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color.lerp(const Color(0xFF2E7D32), const Color(0xFF1B5E20), t)!,
-                      Color.lerp(const Color(0xFF388E3C), const Color(0xFF43A047), t)!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: child,
-              );
-            },
+          // ── Header ────────────────────────────────────────────────
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 14,
+              bottom: 24,
+              left: 16,
+              right: 16,
+            ),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1534,7 +1543,7 @@ class _NsctMaterialScreenState extends State<NsctMaterialScreen>
                             ),
                           ),
                           Text(
-                            '${nsctSubjects.length} subjects · 3 resource types each',
+                            'Live from cloud · Tap to open',
                             style: GoogleFonts.outfit(
                               fontSize: 11,
                               color: Colors.white.withOpacity(0.70),
@@ -1546,31 +1555,31 @@ class _NsctMaterialScreenState extends State<NsctMaterialScreen>
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Resource type legend chips
                 Row(
                   children: [
-                    _HeaderChip(Icons.article_rounded, 'Notes', Colors.white),
+                    _HeaderChip(
+                        Icons.article_rounded, 'Notes', Colors.white),
                     const SizedBox(width: 8),
-                    _HeaderChip(Icons.quiz_rounded, 'MCQs', Colors.white),
+                    _HeaderChip(
+                        Icons.quiz_rounded, 'MCQs', Colors.white),
                     const SizedBox(width: 8),
-                    _HeaderChip(Icons.picture_as_pdf_rounded, 'PDF Guide', Colors.white),
+                    _HeaderChip(Icons.picture_as_pdf_rounded, 'PDF Guide',
+                        Colors.white),
                   ],
-                )
-                    .animate()
-                    .fadeIn(duration: 500.ms, delay: 200.ms)
-                    .slideX(begin: -0.05, end: 0),
+                ),
               ],
             ),
           ),
 
-          // ── Material List ────────────────────────────────────────
+          // ── Subject List ──────────────────────────────────────────
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
               itemCount: nsctSubjects.length,
               itemBuilder: (context, index) {
                 final subject = nsctSubjects[index];
-                return _MaterialSubjectCard(subject: subject, index: index);
+                return _MaterialSubjectCard(
+                    subject: subject, index: index);
               },
             ),
           ),
@@ -1593,7 +1602,8 @@ class _HeaderChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+        border:
+        Border.all(color: Colors.white.withOpacity(0.25), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1614,49 +1624,22 @@ class _HeaderChip extends StatelessWidget {
   }
 }
 
-// ── Resource types data ───────────────────────────────────────────
 const _resourceTypes = [
-  (Icons.article_rounded, 'Notes', Color(0xFF1565C0)),
-  (Icons.quiz_rounded, 'MCQs', Color(0xFF6A1B9A)),
-  (Icons.picture_as_pdf_rounded, 'PDF Guide', Color(0xFFB71C1C)),
+  (Icons.article_rounded, 'Notes', 'notes', Color(0xFF1565C0)),
+  (Icons.quiz_rounded, 'MCQs', 'mcqs', Color(0xFF6A1B9A)),
+  (Icons.picture_as_pdf_rounded, 'PDF Guide', 'pdf-guide',
+  Color(0xFFB71C1C)),
 ];
 
-class _MaterialSubjectCard extends StatefulWidget {
+class _MaterialSubjectCard extends StatelessWidget {
   final NsctSubject subject;
   final int index;
-  const _MaterialSubjectCard({required this.subject, required this.index});
-  @override
-  State<_MaterialSubjectCard> createState() => _MaterialSubjectCardState();
-}
-
-class _MaterialSubjectCardState extends State<_MaterialSubjectCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _shimmerCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _shimmerCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    // Fire shimmer once after entry animation settles
-    Future.delayed(Duration(milliseconds: 300 + widget.index * 45), () {
-      if (mounted) _shimmerCtrl.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _shimmerCtrl.dispose();
-    super.dispose();
-  }
+  const _MaterialSubjectCard(
+      {required this.subject, required this.index});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final subject = widget.subject;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -1673,22 +1656,22 @@ class _MaterialSubjectCardState extends State<_MaterialSubjectCard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Colored top accent bar ──────────────────────────
             Container(
               height: 4,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [subject.color, subject.color.withOpacity(0.50)],
+                  colors: [
+                    subject.color,
+                    subject.color.withOpacity(0.50)
+                  ],
                 ),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Subject header ────────────────────────────
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -1699,7 +1682,7 @@ class _MaterialSubjectCardState extends State<_MaterialSubjectCard>
                           gradient: LinearGradient(
                             colors: [
                               subject.color,
-                              subject.color.withOpacity(0.75),
+                              subject.color.withOpacity(0.75)
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -1740,8 +1723,10 @@ class _MaterialSubjectCardState extends State<_MaterialSubjectCard>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 7, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: subject.color.withOpacity(0.10),
-                                    borderRadius: BorderRadius.circular(5),
+                                    color:
+                                    subject.color.withOpacity(0.10),
+                                    borderRadius:
+                                    BorderRadius.circular(5),
                                   ),
                                   child: Text(
                                     subject.weightage,
@@ -1752,16 +1737,6 @@ class _MaterialSubjectCardState extends State<_MaterialSubjectCard>
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${subject.topics.length} topics',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 10,
-                                    color: isDark
-                                        ? AppTheme.darkText3
-                                        : AppTheme.text3,
-                                  ),
-                                ),
                               ],
                             ),
                           ],
@@ -1769,23 +1744,22 @@ class _MaterialSubjectCardState extends State<_MaterialSubjectCard>
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 14),
-
-                  // ── Resource buttons — fixed overflow ─────────
-                  // Use separate rows to avoid any horizontal overflow
                   Row(
-                    children: List.generate(_resourceTypes.length, (i) {
+                    children:
+                    List.generate(_resourceTypes.length, (i) {
                       final r = _resourceTypes[i];
                       return Expanded(
                         child: Padding(
-                          // gap between chips; no right padding on last
-                          padding: EdgeInsets.only(right: i < 2 ? 7 : 0),
+                          padding:
+                          EdgeInsets.only(right: i < 2 ? 7 : 0),
                           child: _ResourceChip(
                             icon: r.$1,
                             label: r.$2,
-                            chipColor: r.$3,
+                            resourceType: r.$3,
+                            chipColor: r.$4,
                             accentColor: subject.color,
+                            subject: subject,
                           ),
                         ),
                       );
@@ -1798,28 +1772,26 @@ class _MaterialSubjectCardState extends State<_MaterialSubjectCard>
         ),
       ),
     )
-        .animate(delay: Duration(milliseconds: widget.index * 55))
+        .animate(delay: Duration(milliseconds: index * 55))
         .fadeIn(duration: 400.ms)
-        .slideY(begin: 0.12, end: 0, curve: Curves.easeOutCubic)
-        .then()
-        .shimmer(
-      duration: 700.ms,
-      color: subject.color.withOpacity(0.12),
-      delay: Duration(milliseconds: widget.index * 30),
-    );
+        .slideY(begin: 0.12, end: 0, curve: Curves.easeOutCubic);
   }
 }
 
 class _ResourceChip extends StatefulWidget {
   final IconData icon;
   final String label;
+  final String resourceType;
   final Color chipColor;
   final Color accentColor;
+  final NsctSubject subject;
   const _ResourceChip({
     required this.icon,
     required this.label,
+    required this.resourceType,
     required this.chipColor,
     required this.accentColor,
+    required this.subject,
   });
   @override
   State<_ResourceChip> createState() => _ResourceChipState();
@@ -1853,12 +1825,22 @@ class _ResourceChipState extends State<_ResourceChip>
       onTapUp: (_) {
         _c.reverse();
         HapticFeedback.lightImpact();
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _FilesScreen(
+              subject: widget.subject,
+              resourceType: widget.resourceType,
+              resourceLabel: widget.label,
+              chipColor: widget.chipColor,
+            ),
+          ),
+        );
       },
       onTapCancel: () => _c.reverse(),
       child: ScaleTransition(
         scale: _s,
         child: Container(
-          // fixed height so all chips are uniform
           height: 64,
           decoration: BoxDecoration(
             color: widget.accentColor.withOpacity(0.06),
@@ -1887,7 +1869,9 @@ class _ResourceChipState extends State<_ResourceChip>
                 style: GoogleFonts.outfit(
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? AppTheme.darkText2 : AppTheme.text2,
+                  color: isDark
+                      ? AppTheme.darkText2
+                      : AppTheme.text2,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -1896,6 +1880,247 @@ class _ResourceChipState extends State<_ResourceChip>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FILES SCREEN — shows actual Supabase files
+// ══════════════════════════════════════════════════════════════════
+class _FilesScreen extends StatefulWidget {
+  final NsctSubject subject;
+  final String resourceType;
+  final String resourceLabel;
+  final Color chipColor;
+  const _FilesScreen({
+    required this.subject,
+    required this.resourceType,
+    required this.resourceLabel,
+    required this.chipColor,
+  });
+  @override
+  State<_FilesScreen> createState() => _FilesScreenState();
+}
+
+class _FilesScreenState extends State<_FilesScreen> {
+  late Future<List<NsctFile>> _filesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _filesFuture = NsctStorageService.listFiles(
+      subjectFolder: widget.subject.folderName,
+      resourceType: widget.resourceType,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          // ── Header ──────────────────────────────────────────────
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 14,
+              bottom: 20,
+              left: 16,
+              right: 16,
+            ),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  widget.subject.color,
+                  widget.subject.color.withOpacity(0.80)
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white, size: 16),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.subject.name.replaceAll('\n', ' '),
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        widget.resourceLabel,
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.75),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── File List ────────────────────────────────────────────
+          Expanded(
+            child: FutureBuilder<List<NsctFile>>(
+              future: _filesFuture,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(
+                        color: widget.subject.color),
+                  );
+                }
+                final files = snap.data ?? [];
+                if (files.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.folder_open_rounded,
+                            size: 56,
+                            color: isDark
+                                ? AppTheme.darkText4
+                                : AppTheme.text4),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No files available yet',
+                          style: GoogleFonts.outfit(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? AppTheme.darkText2
+                                : AppTheme.text2,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Check back soon!',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: isDark
+                                ? AppTheme.darkText4
+                                : AppTheme.text4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
+                  itemCount: files.length,
+                  separatorBuilder: (_, __) =>
+                  const SizedBox(height: 10),
+                  itemBuilder: (context, i) {
+                    final file = files[i];
+                    return GestureDetector(
+                      onTap: () =>
+                          NsctStorageService.openFile(context, file),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppTheme.darkSurface
+                              : AppTheme.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark
+                                ? AppTheme.darkBorder
+                                : AppTheme.border,
+                          ),
+                          boxShadow: AppTheme.softShadow,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color:
+                                file.iconColor.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(file.icon,
+                                  size: 22, color: file.iconColor),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    file.name,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? AppTheme.darkText1
+                                          : AppTheme.text1,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (file.sizeLabel.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      file.sizeLabel,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? AppTheme.darkText4
+                                            : AppTheme.text4,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(Icons.open_in_new_rounded,
+                                size: 18,
+                                color: isDark
+                                    ? AppTheme.darkText4
+                                    : AppTheme.text4),
+                          ],
+                        ),
+                      ),
+                    )
+                        .animate(
+                        delay: Duration(milliseconds: i * 40))
+                        .fadeIn(duration: 300.ms)
+                        .slideY(begin: 0.08, end: 0);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1995,9 +2220,12 @@ class _OverviewCards extends StatelessWidget {
     final totalTopics =
     nsctSubjects.fold(0, (sum, s) => sum + s.topics.length);
     final cards = [
-      (Icons.book_rounded, '${nsctSubjects.length}', 'Subjects', AppTheme.primaryGrad, AppTheme.primary),
-      (Icons.topic_rounded, '$totalTopics', 'Topics', AppTheme.violetGrad, AppTheme.violet),
-      (Icons.bar_chart_rounded, '100%', 'Marks', AppTheme.greenGrad, AppTheme.greenDark),
+      (Icons.book_rounded, '${nsctSubjects.length}', 'Subjects',
+      AppTheme.primaryGrad, AppTheme.primary),
+      (Icons.topic_rounded, '$totalTopics', 'Topics',
+      AppTheme.violetGrad, AppTheme.violet),
+      (Icons.bar_chart_rounded, '100%', 'Marks', AppTheme.greenGrad,
+      AppTheme.greenDark),
     ];
     return Row(
       children: cards.map((c) {
@@ -2030,7 +2258,8 @@ class _OverviewCards extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: Theme.of(context).brightness == Brightness.dark
+                    color:
+                    Theme.of(context).brightness == Brightness.dark
                         ? AppTheme.darkText1
                         : AppTheme.text1,
                   ),
@@ -2040,7 +2269,8 @@ class _OverviewCards extends StatelessWidget {
                   c.$3,
                   style: GoogleFonts.outfit(
                     fontSize: 10,
-                    color: Theme.of(context).brightness == Brightness.dark
+                    color:
+                    Theme.of(context).brightness == Brightness.dark
                         ? AppTheme.darkText3
                         : AppTheme.text3,
                   ),
@@ -2135,7 +2365,8 @@ class _BottomNav extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         border: Border(
-          top: BorderSide(color: Theme.of(context).dividerColor, width: 1),
+          top: BorderSide(
+              color: Theme.of(context).dividerColor, width: 1),
         ),
         boxShadow: Theme.of(context).brightness == Brightness.dark
             ? [
@@ -2176,8 +2407,8 @@ class _BottomNav extends StatelessWidget {
                           borderRadius: BorderRadius.circular(50),
                           boxShadow: [
                             BoxShadow(
-                                color:
-                                AppTheme.primary.withOpacity(0.28),
+                                color: AppTheme.primary
+                                    .withOpacity(0.28),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3))
                           ],
@@ -2185,8 +2416,7 @@ class _BottomNav extends StatelessWidget {
                             : null,
                         child: Icon(sel ? t.$1 : t.$2,
                             size: 20,
-                            color:
-                            sel ? Colors.white : AppTheme.text4),
+                            color: sel ? Colors.white : AppTheme.text4),
                       ),
                       const SizedBox(height: 3),
                       AnimatedDefaultTextStyle(
@@ -2199,8 +2429,9 @@ class _BottomNav extends StatelessWidget {
                               ? const Color(0xFF42A5F5)
                               : AppTheme.primary)
                               : AppTheme.text4,
-                          fontWeight:
-                          sel ? FontWeight.w700 : FontWeight.w400,
+                          fontWeight: sel
+                              ? FontWeight.w700
+                              : FontWeight.w400,
                         ),
                         child: Text(t.$3),
                       ),

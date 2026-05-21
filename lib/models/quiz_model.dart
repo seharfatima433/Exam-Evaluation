@@ -108,19 +108,43 @@ class FullQuiz {
     required this.questions,
   });
 
-  factory FullQuiz.fromJson(Map<String, dynamic> json) => FullQuiz(
-    quizId: _parseInt(json['quiz_id']),
-    quizCode: json['quiz_code'] ?? '',
-    quizName: json['quiz_name'] ?? '',
-    description: json['description'],
-    quizDate: json['quiz_date'] ?? '',
-    startTime: json['start_time'] ?? '',
-    endTime: json['end_time'] ?? '',
-    isPoll: json['is_poll'] == true || json['is_poll'] == 1,
-    questions: (json['questions'] as List<dynamic>? ?? [])
-        .map((q) => QuizQuestion.fromJson(q))
-        .toList(),
-  );
+  factory FullQuiz.fromJson(Map<String, dynamic> json) {
+    // /api/quiz-attempt returns quiz data — questions may be nested
+    // Try: json['quiz'] wrapper first, then flat
+    final Map<String, dynamic> q =
+        (json['quiz'] is Map ? json['quiz'] as Map<String, dynamic> : null) ?? json;
+
+    // Questions can be under different keys
+    List<dynamic> rawQuestions = [];
+    if (q['questions'] is List && (q['questions'] as List).isNotEmpty) {
+      rawQuestions = q['questions'] as List;
+    } else if (json['questions'] is List && (json['questions'] as List).isNotEmpty) {
+      rawQuestions = json['questions'] as List;
+    } else if (q['mcqs'] is List || q['short_questions'] is List || q['fill_in_the_blank'] is List) {
+      // Merge multiple question type arrays
+      final mcqs   = (q['mcqs']               as List<dynamic>? ?? []);
+      final shorts = (q['short_questions']     as List<dynamic>? ?? []);
+      final fills  = (q['fill_in_the_blank']   as List<dynamic>? ?? []);
+      rawQuestions = [...mcqs, ...shorts, ...fills];
+    } else if (json['mcqs'] is List || json['short_questions'] is List) {
+      final mcqs   = (json['mcqs']             as List<dynamic>? ?? []);
+      final shorts = (json['short_questions']  as List<dynamic>? ?? []);
+      final fills  = (json['fill_in_the_blank'] as List<dynamic>? ?? []);
+      rawQuestions = [...mcqs, ...shorts, ...fills];
+    }
+
+    return FullQuiz(
+      quizId:      _parseInt(q['id'] ?? json['id'] ?? q['quiz_id'] ?? json['quiz_id']),
+      quizCode:    q['quiz_code']?.toString() ?? json['quiz_code']?.toString() ?? '',
+      quizName:    q['quiz_name']?.toString() ?? json['quiz_name']?.toString() ?? '',
+      description: q['description']?.toString() ?? json['description']?.toString(),
+      quizDate:    q['quiz_date']?.toString()  ?? json['quiz_date']?.toString()  ?? '',
+      startTime:   q['start_time']?.toString() ?? json['start_time']?.toString() ?? '',
+      endTime:     q['end_time']?.toString()   ?? json['end_time']?.toString()   ?? '',
+      isPoll:      q['is_poll'] == true || q['is_poll'] == 1,
+      questions:   rawQuestions.map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
 
   static int _parseInt(dynamic v) {
     if (v == null) return 0;

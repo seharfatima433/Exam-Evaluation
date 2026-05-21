@@ -8,6 +8,7 @@ import '../controllers/auth_controller.dart';
 import '../utils/app_theme.dart';
 import 'teacher_screen.dart';
 import 'student_screen.dart';
+import 'student_courses_screen.dart';
 import 'admin_screen.dart';
 
 class MyHttpOverrides extends HttpOverrides {
@@ -85,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen>
       } else if (user.role == 'teacher') {
         dest = TeacherScreen(teacherId: user.id, teacherName: user.name);
       } else {
-        dest = StudentScreen(
+        dest = StudentCoursesScreen(
           studentName: user.name,
           studentId: user.id,
           rollNo: user.rollNo,

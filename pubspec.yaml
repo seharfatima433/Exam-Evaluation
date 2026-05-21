@@ -21,6 +21,12 @@ dependencies:
   flutter_pdfview: ^1.4.4
   syncfusion_flutter_pdfviewer: ^33.1.49
   path_provider: ^2.1.5
+  supabase_flutter: ^2.5.0
+  cached_network_image: ^3.3.1
+  url_launcher: ^6.2.6             # PPTX/DOCX browser mein kholne ke liye
+  dio: ^5.4.3                      # File download ke liye
+  open_filex: ^4.3.4               # Downloaded file open karne ke liye
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
