@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lottie/lottie.dart';
 import '../utils/app_theme.dart';
+import '../widgets/app_profile_drawer.dart';
 import '../widgets/premium_app_bar.dart';
 import '../services/nsct_storage_service.dart';
 import 'quiz_view_screen.dart';
@@ -300,7 +302,13 @@ class _StudentScreenState extends State<StudentScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      drawer: _StudentDrawer(studentName: widget.studentName),
+      drawer: AppProfileDrawer(
+        name: widget.studentName,
+        initials: _initials,
+        role: 'student',
+        extraInfo: widget.rollNo,
+        userId: widget.studentId,
+      ),
       body: Column(
         children: [
           PremiumAppBar(
@@ -308,8 +316,12 @@ class _StudentScreenState extends State<StudentScreen> {
             subtitle:
             widget.rollNo != null ? 'Roll: ${widget.rollNo}' : 'Student',
             initials: _initials,
-            showThemeToggle: true,
-            showLogout: true,
+            onLeadingTap: () {
+              HapticFeedback.lightImpact();
+              _scaffoldKey.currentState?.openDrawer();
+            },
+            showThemeToggle: false,
+            showLogout: false,
             actionIcon: Icons.menu_rounded,
             onActionTap: () {
               _scaffoldKey.currentState?.openDrawer();
@@ -396,242 +408,422 @@ class _QuizCodeEntryPageState extends State<_QuizCodeEntryPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+      padding: EdgeInsets.zero,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Icon ────────────────────────────────────────────────
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              gradient: AppTheme.heroGrad,
-              borderRadius: BorderRadius.circular(22),
-              boxShadow: AppTheme.glowShadow(AppTheme.primary),
+          // ── Hero Banner ──────────────────────────────────────────
+          _buildHeroBanner(),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // ── Code Input Card ──────────────────────────────
+                _buildCodeCard(isDark),
+
+                const SizedBox(height: 24),
+
+                // ── Feature chips ────────────────────────────────
+                _buildFeatureRow(isDark),
+
+                const SizedBox(height: 24),
+
+                // ── Student info chip ────────────────────────────
+                _buildStudentChip(isDark),
+              ],
             ),
-            child: const Icon(Icons.quiz_rounded, color: Colors.white, size: 38),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Hero banner ─────────────────────────────────────────────────
+  Widget _buildHeroBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 38, 24, 36),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF1E1B6A),
+            Color(0xFF3730A3),
+            Color(0xFF4F46E5),
+            Color(0xFF6D28D9),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Interactive human Lottie animation
+          Container(
+            width: 140,
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6D28D9).withOpacity(0.35),
+                  blurRadius: 30,
+                  spreadRadius: 2,
+                ),
+              ],
+              border: Border.all(
+                color: Colors.white.withOpacity(0.18),
+                width: 1.5,
+              ),
+            ),
+            child: ClipOval(
+              child: Lottie.asset(
+                'assets/lottie/student.json',
+                fit: BoxFit.cover,
+                animate: true,
+                repeat: true,
+              ),
+            ),
           )
               .animate()
               .scaleXY(
-              begin: 0.6,
-              end: 1.0,
-              duration: 550.ms,
-              curve: Curves.elasticOut)
-              .fadeIn(duration: 400.ms),
+                  begin: 0.5,
+                  end: 1.0,
+                  duration: 800.ms,
+                  curve: Curves.elasticOut)
+              .fadeIn(duration: 500.ms),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
 
           Text(
             'Join a Quiz',
             style: GoogleFonts.outfit(
-              fontSize: 24,
+              fontSize: 30,
               fontWeight: FontWeight.w800,
-              color: isDark ? AppTheme.darkText1 : AppTheme.text1,
-              letterSpacing: -0.5,
+              color: Colors.white,
+              letterSpacing: -1.0,
             ),
-          )
-              .animate(delay: 100.ms)
-              .fadeIn(duration: 400.ms)
-              .slideY(begin: 0.2, end: 0),
+          ).animate(delay: 130.ms).fadeIn(duration: 500.ms).slideY(begin: 0.25, end: 0),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
 
-          Text(
-            'Enter the quiz code provided by your teacher',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              fontSize: 13,
-              color: isDark ? AppTheme.darkText3 : AppTheme.text3,
-            ),
-          ).animate(delay: 160.ms).fadeIn(duration: 400.ms),
-
-          const SizedBox(height: 36),
-
-          // ── Code Input Card ──────────────────────────────────────
+          // pill tag
           Container(
-            decoration: AppTheme.themedCard(context, radius: 16),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(
+                  color: Colors.white.withOpacity(0.22), width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                Icon(Icons.auto_awesome_rounded,
+                    size: 12,
+                    color: Colors.amber.shade200),
+                const SizedBox(width: 6),
                 Text(
-                  'Quiz Code',
+                  'Enter code to start your exam',
                   style: GoogleFonts.outfit(
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                    color: Colors.white.withOpacity(0.88),
                     letterSpacing: 0.2,
                   ),
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _codeCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? AppTheme.darkText1 : AppTheme.text1,
-                    letterSpacing: 6,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'ABC123',
-                    hintStyle: GoogleFonts.outfit(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? AppTheme.darkText4 : AppTheme.text4,
-                      letterSpacing: 6,
-                    ),
-                    filled: true,
-                    fillColor: isDark
-                        ? AppTheme.darkInput
-                        : AppTheme.primaryBg.withOpacity(0.5),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: isDark ? AppTheme.darkBorder : AppTheme.border,
-                          width: 1.2),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: isDark ? AppTheme.darkBorder : AppTheme.border,
-                          width: 1.2),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: isDark
-                              ? const Color(0xFF42A5F5)
-                              : AppTheme.primary,
-                          width: 2),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 16),
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: Icon(Icons.tag_rounded,
-                          size: 20,
-                          color:
-                          isDark ? AppTheme.darkText4 : AppTheme.text4),
-                    ),
-                    prefixIconConstraints:
-                    const BoxConstraints(minWidth: 50, minHeight: 50),
-                  ),
-                  onSubmitted: (_) => _joinQuiz(),
-                ),
-                const SizedBox(height: 16),
+              ],
+            ),
+          ).animate(delay: 230.ms).fadeIn(duration: 500.ms),
 
-                // ── Join Button ──────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: Material(
-                    color: Colors.transparent,
+          const SizedBox(height: 20),
+
+          // Quick badges
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _heroBadge(Icons.bolt_rounded, 'Instant', Colors.amber.shade300),
+              const SizedBox(width: 8),
+              _heroBadge(Icons.psychology_rounded, 'AI Graded',
+                  Colors.greenAccent.shade200),
+              const SizedBox(width: 8),
+              _heroBadge(Icons.shield_rounded, 'Secure',
+                  Colors.lightBlue.shade200),
+            ],
+          ).animate(delay: 330.ms).fadeIn(duration: 500.ms),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroBadge(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(color: Colors.white.withOpacity(0.18), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withOpacity(0.90),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Code input card ──────────────────────────────────────────────
+  Widget _buildCodeCard(bool isDark) {
+    return Container(
+      decoration: AppTheme.themedCard(context, radius: 18),
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGrad,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(Icons.tag_rounded,
+                    color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Quiz Code',
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          TextField(
+            controller: _codeCtrl,
+            textCapitalization: TextCapitalization.characters,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+              letterSpacing: 8,
+            ),
+            decoration: InputDecoration(
+              hintText: 'ABC123',
+              hintStyle: GoogleFonts.outfit(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: isDark ? AppTheme.darkText4 : AppTheme.text4,
+                letterSpacing: 8,
+              ),
+              filled: true,
+              fillColor: isDark
+                  ? AppTheme.darkInput
+                  : AppTheme.primaryBg.withOpacity(0.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                    color: isDark ? AppTheme.darkBorder : AppTheme.border,
+                    width: 1.2),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                    color: isDark ? AppTheme.darkBorder : AppTheme.border,
+                    width: 1.2),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                    color: isDark
+                        ? const Color(0xFF42A5F5)
+                        : AppTheme.primary,
+                    width: 2),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            ),
+            onSubmitted: (_) => _joinQuiz(),
+          ),
+          const SizedBox(height: 16),
+
+          // Join button
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: _loading ? null : _joinQuiz,
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    gradient: _loading ? null : AppTheme.heroGrad,
+                    color: _loading
+                        ? (isDark ? AppTheme.darkInput : AppTheme.bg)
+                        : null,
                     borderRadius: BorderRadius.circular(14),
-                    child: InkWell(
-                      onTap: _loading ? null : _joinQuiz,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Ink(
-                        decoration: BoxDecoration(
-                          gradient: _loading ? null : AppTheme.heroGrad,
-                          color: _loading
-                              ? (isDark ? AppTheme.darkInput : AppTheme.bg)
-                              : null,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: _loading
-                              ? null
-                              : AppTheme.glowShadow(AppTheme.primary),
-                        ),
-                        child: Center(
-                          child: _loading
-                              ? const SizedBox(
-                            width: 22,
-                            height: 22,
+                    boxShadow:
+                        _loading ? null : AppTheme.glowShadow(AppTheme.primary),
+                  ),
+                  child: Center(
+                    child: _loading
+                        ? const SizedBox(
+                            width: 22, height: 22,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation(
-                                  AppTheme.primary),
+                              valueColor:
+                                  AlwaysStoppedAnimation(AppTheme.primary),
                             ),
                           )
-                              : Row(
+                        : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              const Icon(Icons.play_arrow_rounded,
+                                  color: Colors.white, size: 22),
+                              const SizedBox(width: 8),
                               Text(
-                                'Join Quiz',
+                                'Start Quiz',
                                 style: GoogleFonts.outfit(
-                                  fontSize: 15,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                   letterSpacing: 0.2,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              const Icon(Icons.arrow_forward_rounded,
-                                  color: Colors.white, size: 18),
                             ],
                           ),
-                        ),
-                      ),
-                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ).animate(delay: 200.ms).fadeIn(duration: 450.ms).slideY(begin: 0.1, end: 0);
+  }
+
+  // ── Feature row ──────────────────────────────────────────────────
+  Widget _buildFeatureRow(bool isDark) {
+    const features = [
+      (Icons.bolt_rounded, 'Instant\nResults', AppTheme.amber),
+      (Icons.psychology_rounded, 'AI\nEvaluation', AppTheme.primary),
+      (Icons.lock_clock_rounded, 'Timed\nQuizzes', AppTheme.green),
+    ];
+    return Row(
+      children: features.asMap().entries.map((entry) {
+        final i = entry.key;
+        final (icon, label, color) = entry.value;
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(
+              left: i == 0 ? 0 : 6,
+              right: i == 2 ? 0 : 6,
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? color.withOpacity(0.08)
+                  : color.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: color.withOpacity(0.22), width: 1),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(icon, size: 22, color: color),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppTheme.darkText2 : AppTheme.text2,
+                    height: 1.3,
                   ),
                 ),
               ],
             ),
           )
-              .animate(delay: 240.ms)
-              .fadeIn(duration: 450.ms)
-              .slideY(begin: 0.1, end: 0),
+              .animate(delay: (360 + i * 80).ms)
+              .fadeIn(duration: 400.ms)
+              .slideY(begin: 0.18, end: 0),
+        );
+      }).toList(),
+    );
+  }
 
-          const SizedBox(height: 24),
-
-          // ── Student info chip ────────────────────────────────────
-          Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? AppTheme.primary.withOpacity(0.10)
-                  : AppTheme.primaryBg,
-              borderRadius: BorderRadius.circular(50),
-              border: Border.all(
-                  color: AppTheme.primary.withOpacity(0.20), width: 1),
+  // ── Student chip ─────────────────────────────────────────────────
+  Widget _buildStudentChip(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppTheme.primary.withOpacity(0.10)
+            : AppTheme.primaryBg,
+        borderRadius: BorderRadius.circular(50),
+        border:
+            Border.all(color: AppTheme.primary.withOpacity(0.20), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.person_rounded, size: 14, color: AppTheme.primary),
+          const SizedBox(width: 7),
+          Text(
+            widget.studentName,
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.primary,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.person_rounded,
-                    size: 14, color: AppTheme.primary),
-                const SizedBox(width: 7),
-                Text(
-                  widget.studentName,
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary,
-                  ),
-                ),
-                if (widget.rollNo != null) ...[
-                  Container(
-                    width: 1,
-                    height: 12,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    color: AppTheme.primary.withOpacity(0.3),
-                  ),
-                  Text(
-                    widget.rollNo!,
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      color: AppTheme.primary.withOpacity(0.8),
-                    ),
-                  ),
-                ],
-              ],
+          ),
+          if (widget.rollNo != null) ...[
+            Container(
+              width: 1, height: 12,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              color: AppTheme.primary.withOpacity(0.3),
             ),
-          ).animate(delay: 350.ms).fadeIn(duration: 400.ms),
+            Text(
+              widget.rollNo!,
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                color: AppTheme.primary.withOpacity(0.8),
+              ),
+            ),
+          ],
         ],
       ),
-    );
+    ).animate(delay: 520.ms).fadeIn(duration: 400.ms);
   }
 }
 

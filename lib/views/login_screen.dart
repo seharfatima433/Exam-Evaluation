@@ -1,10 +1,14 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lottie/lottie.dart';
 import '../controllers/auth_controller.dart';
+import '../services/notification_service.dart';
+import '../services/fcm_sender_service.dart';
 import '../utils/app_theme.dart';
 import 'teacher_screen.dart';
 import 'student_screen.dart';
@@ -31,6 +35,10 @@ class _LoginScreenState extends State<LoginScreen>
   final _authCtrl     = AuthController();
   bool _obscure = true;
 
+  final _inputFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+  bool _rememberMe = true;
+
   // ── Fade-in controller ────────────────────────────────────────
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
@@ -43,6 +51,8 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     HttpOverrides.global = MyHttpOverrides();
     _authCtrl.addListener(() { if (mounted) setState(() {}); });
+    _inputFocusNode.addListener(() { if (mounted) setState(() {}); });
+    _passwordFocusNode.addListener(() { if (mounted) setState(() {}); });
 
     // Page fade-in
     _fadeCtrl = AnimationController(
@@ -62,6 +72,8 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _inputCtrl.dispose();
     _passwordCtrl.dispose();
+    _inputFocusNode.dispose();
+    _passwordFocusNode.dispose();
     _authCtrl.dispose();
     _fadeCtrl.dispose();
     _lightCtrl.dispose();
@@ -80,6 +92,23 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     if (ok) {
       final user = _authCtrl.currentUser!;
+      
+      // Trigger Welcome Notification via FCM!
+      FCMSenderService.sendWelcomeNotification(user.name).then((errorMsg) {
+        if (errorMsg != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "🔔 FCM Notification Error: $errorMsg",
+                style: const TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.redAccent,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      });
+
       Widget dest;
       if (user.role == 'admin') {
         dest = AdminDashboard(adminName: user.name);
@@ -131,9 +160,10 @@ class _LoginScreenState extends State<LoginScreen>
               ? AppTheme.splashGrad
               : const LinearGradient(
             colors: [
-              Color(0xFFE8F0FE),
-              Color(0xFFD0E4FB),
-              Color(0xFFF0F7FF),
+              Color(0xFFF0EEFF),
+              Color(0xFFE8E3FF),
+              Color(0xFFF5F3FF),
+              Color(0xFFEDE9FE),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -143,12 +173,14 @@ class _LoginScreenState extends State<LoginScreen>
           child: Stack(
             children: [
               // ── Background ambient blobs ──────────────────────
-              _blob(top: -90, right: -90, size: 280,
-                  color: AppTheme.primary.withOpacity(isDark ? 0.22 : 0.14)),
-              _blob(bottom: 40, left: -80, size: 230,
-                  color: AppTheme.primaryLighter.withOpacity(isDark ? 0.14 : 0.10)),
-              _blob(top: 160, left: -60, size: 180,
-                  color: AppTheme.violet.withOpacity(isDark ? 0.08 : 0.05)),
+              _blob(top: -90, right: -90, size: 300,
+                  color: AppTheme.primary.withOpacity(isDark ? 0.24 : 0.16)),
+              _blob(bottom: 40, left: -80, size: 250,
+                  color: AppTheme.violet.withOpacity(isDark ? 0.18 : 0.12)),
+              _blob(top: 200, left: -50, size: 180,
+                  color: AppTheme.primaryLighter.withOpacity(isDark ? 0.10 : 0.08)),
+              _blob(bottom: 160, right: -60, size: 160,
+                  color: AppTheme.violetMid.withOpacity(isDark ? 0.08 : 0.06)),
 
               // ── Main content ──────────────────────────────────
               FadeTransition(
@@ -198,37 +230,35 @@ class _LoginScreenState extends State<LoginScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
+        // Dynamic animated App Icon
         Container(
-          width: 88, height: 88,
+          width: 110,
+          height: 110,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1565C0), Color(0xFF1E88E5), Color(0xFF42A5F5)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: AppTheme.glowShadow(AppTheme.primary),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(top: 12, right: 12,
-                  child: Container(width: 14, height: 14,
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
-                          shape: BoxShape.circle))),
-              Positioned(bottom: 12, left: 12,
-                  child: Container(width: 8, height: 8,
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.13),
-                          shape: BoxShape.circle))),
-              const Icon(Icons.school_rounded, color: Colors.white, size: 40),
+            color: isDark ? AppTheme.darkInput : Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withOpacity(0.25),
+                blurRadius: 28,
+                spreadRadius: 2,
+              ),
             ],
+            border: Border.all(
+              color: AppTheme.primary.withOpacity(0.35),
+              width: 2.0,
+            ),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Image.asset(
+            'assets/icon/app_icon.png',
+            fit: BoxFit.contain,
           ),
         )
-            .animate()
-            .scaleXY(begin: 0.55, end: 1.0,
-            duration: 650.ms, curve: Curves.elasticOut)
-            .fadeIn(duration: 450.ms),
+            .animate(onPlay: (controller) => controller.repeat(reverse: true))
+            .scaleXY(begin: 0.94, end: 1.04, duration: 1500.ms, curve: Curves.easeInOut)
+            .then()
+            .shimmer(duration: 1800.ms),
 
         const SizedBox(height: 18),
 
@@ -284,7 +314,10 @@ class _LoginScreenState extends State<LoginScreen>
     )
         .animate(delay: 320.ms)
         .fadeIn(duration: 550.ms)
-        .slideY(begin: 0.12, end: 0, duration: 550.ms, curve: Curves.easeOut);
+        .slideY(begin: 0.12, end: 0, duration: 550.ms, curve: Curves.easeOut)
+        .then(delay: 100.ms)
+        .animate(onPlay: (controller) => controller.repeat(reverse: true))
+        .slideY(begin: 0, end: 0.015, duration: 2500.ms, curve: Curves.easeInOut);
   }
 
   // ── Login card content ────────────────────────────────────────
@@ -293,64 +326,133 @@ class _LoginScreenState extends State<LoginScreen>
 
     return Container(
       width: double.infinity,
-      decoration: AppTheme.themedCard(context, radius: 24).copyWith(
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppTheme.darkSurface.withOpacity(0.72)
+            : Colors.white.withOpacity(0.78),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.08)
+              : AppTheme.primary.withOpacity(0.12),
+          width: 1.2,
+        ),
         boxShadow: isDark
             ? [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.35),
-              blurRadius: 55, offset: const Offset(0, 22)),
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.12),
-              blurRadius: 30, offset: const Offset(0, 10)),
-        ]
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.40),
+                    blurRadius: 45,
+                    offset: const Offset(0, 18)),
+                BoxShadow(
+                    color: AppTheme.primary.withOpacity(0.15),
+                    blurRadius: 25,
+                    offset: const Offset(0, 8)),
+              ]
             : [
-          const BoxShadow(
-              color: Color(0x281565C0),
-              blurRadius: 55, offset: Offset(0, 22)),
-          const BoxShadow(
-              color: Color(0x0E000000),
-              blurRadius: 10, offset: Offset(0, 4)),
-        ],
+                BoxShadow(
+                    color: AppTheme.primary.withOpacity(0.08),
+                    blurRadius: 45,
+                    offset: const Offset(0, 18)),
+                const BoxShadow(
+                    color: Color(0x0E000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 4)),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: Column(
-          children: [
-            // Top gradient accent strip
-            Container(
-              height: 4,
-              decoration: const BoxDecoration(gradient: AppTheme.primaryGrad),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Welcome Back',
-                      style: GoogleFonts.outfit(
-                          fontSize: 20, fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.darkText1 : AppTheme.text1,
-                          letterSpacing: -0.5)),
-                  const SizedBox(height: 4),
-                  Text('Sign in to continue to your account',
-                      style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          color: isDark ? AppTheme.darkText3 : AppTheme.text3)),
-                  const SizedBox(height: 22),
-                  _buildTextField(
-                    controller: _inputCtrl,
-                    label: 'Email or Roll Number',
-                    hint: 'you@example.com',
-                    icon: Icons.person_outline_rounded,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildPasswordField(),
-                  const SizedBox(height: 20),
-                  _buildSignInButton(),
-                ],
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Column(
+            children: [
+              // Top gradient accent strip
+              Container(
+                height: 4,
+                decoration: const BoxDecoration(gradient: AppTheme.primaryGrad),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Welcome Back',
+                        style: GoogleFonts.outfit(
+                            fontSize: 20, fontWeight: FontWeight.w800,
+                            color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                            letterSpacing: -0.5)),
+                    const SizedBox(height: 4),
+                    Text('Sign in to continue to your account',
+                        style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: isDark ? AppTheme.darkText3 : AppTheme.text3)),
+                    const SizedBox(height: 22),
+                    _buildTextField(
+                      controller: _inputCtrl,
+                      label: 'Email or Roll Number',
+                      hint: 'you@example.com',
+                      icon: Icons.person_outline_rounded,
+                      focusNode: _inputFocusNode,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildPasswordField(),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() => _rememberMe = !_rememberMe),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (val) => setState(() => _rememberMe = val ?? true),
+                                  activeColor: AppTheme.primary,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Remember Me',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            _snack('Password reset is managed by your system administrator.');
+                          },
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            'Forgot Password?',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    _buildSignInButton(),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -361,97 +463,151 @@ class _LoginScreenState extends State<LoginScreen>
     required String label,
     required String hint,
     required IconData icon,
+    required FocusNode focusNode,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return TextField(
-      controller: controller,
-      style: GoogleFonts.outfit(
-          fontSize: 14,
-          color: isDark ? AppTheme.darkText1 : AppTheme.text1),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Icon(icon, size: 18, color: AppTheme.text4),
+    final hasFocus = focusNode.hasFocus;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppTheme.darkInput.withOpacity(0.6)
+            : Colors.white.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hasFocus
+              ? AppTheme.primary
+              : (isDark ? AppTheme.darkBorder.withOpacity(0.5) : AppTheme.border.withOpacity(0.5)),
+          width: hasFocus ? 2.0 : 1.2,
         ),
-        prefixIconConstraints:
-        const BoxConstraints(minWidth: 46, minHeight: 46),
-        filled: true,
-        fillColor: isDark ? AppTheme.darkInput : const Color(0xFFF5F7FF),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-                color: isDark ? AppTheme.darkBorder : AppTheme.border,
-                width: 1.2)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-                color: isDark ? AppTheme.darkBorder : AppTheme.border,
-                width: 1.2)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-                color: isDark ? const Color(0xFF42A5F5) : AppTheme.primary,
-                width: 2.0)),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        labelStyle: GoogleFonts.outfit(
-            color: isDark ? AppTheme.darkText3 : AppTheme.text3, fontSize: 13),
-        hintStyle: GoogleFonts.outfit(
-            color: isDark ? AppTheme.darkText4 : AppTheme.text4, fontSize: 13),
+        boxShadow: hasFocus
+            ? [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.18),
+            blurRadius: 10,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+        ]
+            : [],
+      ),
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        style: GoogleFonts.outfit(
+            fontSize: 14,
+            color: isDark ? AppTheme.darkText1 : AppTheme.text1),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Icon(
+              icon,
+              size: 19,
+              color: hasFocus
+                  ? AppTheme.primary
+                  : (isDark ? AppTheme.darkText4 : AppTheme.text4),
+            ),
+          ),
+          prefixIconConstraints:
+          const BoxConstraints(minWidth: 46, minHeight: 46),
+          filled: true,
+          fillColor: Colors.transparent,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          labelStyle: GoogleFonts.outfit(
+              color: hasFocus
+                  ? AppTheme.primary
+                  : (isDark ? AppTheme.darkText3 : AppTheme.text3),
+              fontSize: 13),
+          hintStyle: GoogleFonts.outfit(
+              color: isDark ? AppTheme.darkText4 : AppTheme.text4, fontSize: 13),
+        ),
       ),
     );
   }
 
   Widget _buildPasswordField() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return TextField(
-      controller: _passwordCtrl,
-      obscureText: _obscure,
-      style: GoogleFonts.outfit(
-          fontSize: 14,
-          color: isDark ? AppTheme.darkText1 : AppTheme.text1),
-      decoration: InputDecoration(
-        labelText: 'Password',
-        hintText: 'Enter your password',
-        prefixIcon: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          child: Icon(Icons.lock_outline_rounded, size: 18, color: AppTheme.text4),
+    final hasFocus = _passwordFocusNode.hasFocus;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppTheme.darkInput.withOpacity(0.6)
+            : Colors.white.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hasFocus
+              ? AppTheme.primary
+              : (isDark ? AppTheme.darkBorder.withOpacity(0.5) : AppTheme.border.withOpacity(0.5)),
+          width: hasFocus ? 2.0 : 1.2,
         ),
-        prefixIconConstraints:
-        const BoxConstraints(minWidth: 46, minHeight: 46),
-        suffixIcon: IconButton(
-          icon: Icon(
-            _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-            size: 18, color: AppTheme.text4,
+        boxShadow: hasFocus
+            ? [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.18),
+            blurRadius: 10,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
           ),
-          onPressed: () => setState(() => _obscure = !_obscure),
-          splashRadius: 18,
+        ]
+            : [],
+      ),
+      child: TextField(
+        controller: _passwordCtrl,
+        focusNode: _passwordFocusNode,
+        obscureText: _obscure,
+        style: GoogleFonts.outfit(
+            fontSize: 14,
+            color: isDark ? AppTheme.darkText1 : AppTheme.text1),
+        decoration: InputDecoration(
+          labelText: 'Password',
+          hintText: 'Enter your password',
+          prefixIcon: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Icon(
+              Icons.lock_outline_rounded,
+              size: 19,
+              color: hasFocus
+                  ? AppTheme.primary
+                  : (isDark ? AppTheme.darkText4 : AppTheme.text4),
+            ),
+          ),
+          prefixIconConstraints:
+          const BoxConstraints(minWidth: 46, minHeight: 46),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              size: 18,
+              color: hasFocus
+                  ? AppTheme.primary
+                  : (isDark ? AppTheme.darkText4 : AppTheme.text4),
+            ),
+            onPressed: () => setState(() => _obscure = !_obscure),
+            splashRadius: 18,
+          ),
+          filled: true,
+          fillColor: Colors.transparent,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          labelStyle: GoogleFonts.outfit(
+              color: hasFocus
+                  ? AppTheme.primary
+                  : (isDark ? AppTheme.darkText3 : AppTheme.text3),
+              fontSize: 13),
+          hintStyle: GoogleFonts.outfit(
+              color: isDark ? AppTheme.darkText4 : AppTheme.text4, fontSize: 13),
         ),
-        filled: true,
-        fillColor: isDark ? AppTheme.darkInput : const Color(0xFFF5F7FF),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-                color: isDark ? AppTheme.darkBorder : AppTheme.border,
-                width: 1.2)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-                color: isDark ? AppTheme.darkBorder : AppTheme.border,
-                width: 1.2)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-                color: isDark ? const Color(0xFF42A5F5) : AppTheme.primary,
-                width: 2.0)),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        labelStyle: GoogleFonts.outfit(
-            color: isDark ? AppTheme.darkText3 : AppTheme.text3, fontSize: 13),
-        hintStyle: GoogleFonts.outfit(
-            color: isDark ? AppTheme.darkText4 : AppTheme.text4, fontSize: 13),
       ),
     );
   }

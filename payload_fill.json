@@ -1,0 +1,10 @@
+{
+  "topic": "test",
+  "difficulty": "medium",
+  "is_poll": false,
+  "categories": {
+    "mcqs": 2,
+    "short_questions": 1,
+    "fill_blanks": 2
+  }
+}

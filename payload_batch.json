@@ -1,0 +1,10 @@
+{
+  "topic": "Software Quality Assurance",
+  "difficulty": "medium",
+  "is_poll": true,
+  "categories": {
+    "mcqs": 25,
+    "short_questions": 1,
+    "fill_blanks": 1
+  }
+}

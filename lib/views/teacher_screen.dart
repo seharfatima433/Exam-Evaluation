@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lottie/lottie.dart';
 import '../controllers/course_controller.dart';
 import '../models/course_model.dart';
 import '../utils/app_theme.dart';
 import '../widgets/premium_app_bar.dart';
+import '../widgets/app_profile_drawer.dart';
 import 'course_quizzes_screen.dart';
 import 'quiz_creation_screen.dart';
 
@@ -24,6 +26,7 @@ class TeacherScreen extends StatefulWidget {
 class _TeacherScreenState extends State<TeacherScreen>
     with SingleTickerProviderStateMixin {
   late final CourseController _ctrl;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   String get _initials {
     final p = widget.teacherName.trim().split(' ');
@@ -50,15 +53,27 @@ class _TeacherScreenState extends State<TeacherScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      drawer: AppProfileDrawer(
+        name: widget.teacherName,
+        initials: _initials,
+        role: 'teacher',
+        extraInfo: 'ID-${widget.teacherId}',
+        userId: widget.teacherId,
+      ),
       body: Column(
         children: [
           PremiumAppBar(
             title: widget.teacherName,
             subtitle: 'My Courses',
             initials: _initials,
-            showThemeToggle: true,
-            showLogout: true,
+            onLeadingTap: () {
+              HapticFeedback.lightImpact();
+              _scaffoldKey.currentState?.openDrawer();
+            },
+            showThemeToggle: false,
+            showLogout: false,
             actionIcon: Icons.refresh_rounded,
             onActionTap: () => _ctrl.fetchTeacherCourses(widget.teacherId),
           ),
@@ -106,8 +121,16 @@ class _TeacherScreenState extends State<TeacherScreen>
       onRefresh: () => _ctrl.fetchTeacherCourses(widget.teacherId),
       color: Theme.of(context).primaryColor,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 28),
         children: [
+          // ── Teacher Hero Banner ─────────────────────────────────
+          _TeacherHeroBanner(teacherName: widget.teacherName),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           // Stats row
           _StatsRow(
             courseCount: _ctrl.courseCount,
@@ -161,6 +184,9 @@ class _TeacherScreenState extends State<TeacherScreen>
                   .slideX(begin: 0.06, end: 0, duration: 400.ms),
             );
           }),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -193,6 +219,110 @@ class _TeacherScreenState extends State<TeacherScreen>
                   color: AppTheme.primary)),
         ),
       ],
+    );
+  }
+}
+
+// ── Teacher Hero Banner ───────────────────────────────────────────
+class _TeacherHeroBanner extends StatelessWidget {
+  final String teacherName;
+  const _TeacherHeroBanner({required this.teacherName});
+
+  @override
+  Widget build(BuildContext context) {
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12
+        ? 'Good Morning'
+        : hour < 17
+            ? 'Good Afternoon'
+            : 'Good Evening';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 28, 22, 24),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF1E1B6A),
+            Color(0xFF3730A3),
+            Color(0xFF4F46E5),
+            Color(0xFF6D28D9),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Interactive human Lottie teaching welcome animation
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6D28D9).withOpacity(0.35),
+                  blurRadius: 18,
+                  spreadRadius: 2,
+                ),
+              ],
+              border: Border.all(
+                color: Colors.white.withOpacity(0.18),
+                width: 1.5,
+              ),
+            ),
+            child: ClipOval(
+              child: Lottie.asset(
+                'assets/lottie/teacher.json',
+                fit: BoxFit.cover,
+                animate: true,
+                repeat: true,
+              ),
+            ),
+          )
+              .animate()
+              .scaleXY(
+                  begin: 0.5,
+                  end: 1.0,
+                  duration: 800.ms,
+                  curve: Curves.elasticOut)
+              .fadeIn(duration: 500.ms),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  greeting + '! 👋',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.78),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ).animate(delay: 100.ms).fadeIn(duration: 450.ms),
+                const SizedBox(height: 4),
+                Text(
+                  teacherName,
+                  style: GoogleFonts.outfit(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.6,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )
+                    .animate(delay: 150.ms)
+                    .fadeIn(duration: 500.ms)
+                    .slideY(begin: 0.2, end: 0),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

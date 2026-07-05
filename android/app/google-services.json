@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "899337396856",
+    "project_id": "eduquiz-6ed21",
+    "storage_bucket": "eduquiz-6ed21.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:899337396856:android:252fc70d5d5083bac5c38d",
+        "android_client_info": {
+          "package_name": "com.example.ai_exam_evaluation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5eDGSVRCW6nolMiKyWu89Z_thmop72H8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

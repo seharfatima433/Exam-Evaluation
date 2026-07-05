@@ -8,6 +8,7 @@ import '../models/quiz_model.dart';
 import '../utils/app_theme.dart';
 import '../widgets/premium_app_bar.dart';
 import 'quiz_view_screen.dart';
+import 'quiz_monitoring_screen.dart';
 
 class CourseQuizzesScreen extends StatefulWidget {
   final int teacherId;
@@ -336,30 +337,79 @@ class _QuizTileState extends State<_QuizTile>
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGrad,
-                          borderRadius: BorderRadius.circular(50),
-                          boxShadow: AppTheme.glowShadow(AppTheme.primary,
-                              intensity: 0.4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Live Monitor Button
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.mediumImpact();
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (_, a, __) => QuizMonitoringScreen(
+                                  quizCode: widget.quiz.quizCode,
+                                  quizName: widget.quiz.quizName,
+                                ),
+                                transitionsBuilder: (_, a, __, child) =>
+                                    FadeTransition(opacity: a, child: child),
+                                transitionDuration: const Duration(milliseconds: 280),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.greenDark.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(50),
+                              border: Border.all(
+                                color: AppTheme.greenDark.withOpacity(0.25),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.analytics_rounded,
+                                    size: 12, color: AppTheme.greenDark),
+                                const SizedBox(width: 4),
+                                Text('Live Monitor',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 11, fontWeight: FontWeight.w700,
+                                        color: AppTheme.greenDark)),
+                              ],
+                            ),
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('View Quiz',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 11, fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.arrow_forward_rounded,
-                                size: 12, color: Colors.white),
-                          ],
+
+                        // View Quiz Button
+                        GestureDetector(
+                          onTap: widget.onTap,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.primaryGrad,
+                              borderRadius: BorderRadius.circular(50),
+                              boxShadow: AppTheme.glowShadow(AppTheme.primary,
+                                  intensity: 0.4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('View Quiz',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 11, fontWeight: FontWeight.w700,
+                                        color: Colors.white)),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.arrow_forward_rounded,
+                                    size: 12, color: Colors.white),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),

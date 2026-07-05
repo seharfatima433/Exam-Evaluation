@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../controllers/course_controller.dart';
 import '../models/course_model.dart';
 import '../services/local_quiz_db.dart';
+import '../services/fcm_sender_service.dart';
 import '../utils/app_theme.dart';
 import '../widgets/premium_app_bar.dart';
 
@@ -27,14 +28,16 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _topicCtrl = TextEditingController();
+  final _marksCtrl = TextEditingController(text: '10');
   final _local = LocalQuizDb();
 
   DateTime? _date;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   String _difficulty = 'medium';
-  int _numQuestions = 5;
-  final Set<String> _cats = {'mcqs'};
+  int _mcqCount = 5;
+  int _shortCount = 0;
+  int _fillCount = 0;
   bool _isPoll = false;
 
   List<Map<String, dynamic>> _questions = [];
@@ -61,6 +64,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _topicCtrl.dispose();
+    _marksCtrl.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -154,6 +158,22 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
   String _fmtDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  String _fmt12(TimeOfDay? t, String fb) {
+    if (t == null) return fb;
+    final hour = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    final minute = t.minute.toString().padLeft(2, '0');
+    final period = t.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  String _fmtDateReadable(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
   String get _timerStr {
     final m = _elapsed ~/ 60;
     final s = _elapsed % 60;
@@ -190,27 +210,6 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
   }
 
   // ── Generate ──────────────────────────────────────────────────
-  // ── Per-type question count distribution ─────────────────────
-  // Distributes _numQuestions as evenly as possible across selected types.
-  // e.g. 10 questions, 3 types → [4, 3, 3]
-  // e.g.  7 questions, 2 types → [4, 3]
-  // e.g.  5 questions, 1 type  → [5]
-  Map<String, int> _perTypeCount() {
-    final types = _cats.toList();
-    final total = _numQuestions;
-    final n = types.length;
-    final base = total ~/ n;
-    final extra = total % n;
-    final result = <String, int>{};
-    for (int i = 0; i < n; i++) {
-      result[types[i]] = base + (i < extra ? 1 : 0);
-    }
-    return result;
-  }
-
-  // In QuizCreationScreen.dart
-  // Find the _generate() method and replace the section where _ctrl.generateQuiz is called
-
   Future<void> _generate() async {
     if (_nameCtrl.text.trim().isEmpty) {
       _snack('Enter quiz name', error: true);
@@ -224,7 +223,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
       _snack('Select a date', error: true);
       return;
     }
-    if (_cats.isEmpty) {
+    if (_mcqCount == 0 && _shortCount == 0 && _fillCount == 0 && !_isPoll) {
       _snack('Select at least one question type', error: true);
       return;
     }
@@ -232,39 +231,15 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
     HapticFeedback.mediumImpact();
     _startTimer();
 
-    // Poll logic:
-    //   MCQs  → hamesha 100 fixed (locked)
-    //   Short/Fill (jo bhi selected ho) → _numQuestions ko unme evenly divide karo
-    //     e.g. slider=10, Short+Fill both → short=5, fill=5
-    //     e.g. slider=7,  sirf Short     → short=7
-    //     e.g. slider=7,  Short+Fill     → short=4, fill=3
-    // Normal quiz → _perTypeCount() se distribute (same as before)
-    final Map<String, dynamic> categoriesPayload;
+    final Map<String, dynamic> categoriesPayload = {};
     if (_isPoll) {
-      // Leftover types (short + fill jo selected hain)
-      final leftover = _cats
-          .where((t) => t != 'mcqs')
-          .toList();
-
-      final Map<String, int> leftoverCounts = {};
-      if (leftover.isNotEmpty) {
-        final n = leftover.length;
-        final base = _numQuestions ~/ n;
-        final extra = _numQuestions % n;
-        for (int i = 0; i < n; i++) {
-          leftoverCounts[leftover[i]] = base + (i < extra ? 1 : 0);
-        }
-      }
-
-      categoriesPayload = {
-        'mcqs': 100,              // hamesha 100
-        ...leftoverCounts,        // short/fill — slider se divide
-      };
+      categoriesPayload['mcqs'] = 100;
+      if (_shortCount > 0) categoriesPayload['short_questions'] = _shortCount;
+      if (_fillCount > 0) categoriesPayload['fill_blanks'] = _fillCount;
     } else {
-      final counts = _perTypeCount();
-      categoriesPayload = {
-        for (final entry in counts.entries) entry.key: entry.value,
-      };
+      if (_mcqCount > 0) categoriesPayload['mcqs'] = _mcqCount;
+      if (_shortCount > 0) categoriesPayload['short_questions'] = _shortCount;
+      if (_fillCount > 0) categoriesPayload['fill_blanks'] = _fillCount;
     }
 
     await _ctrl.generateQuiz({
@@ -301,8 +276,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
     final q = _ctrl.generatedQuestions!;
 
     // ── Only parse types the teacher actually selected ──────────
-    // If the API returns extra types we didn't ask for, ignore them.
-    if (_cats.contains('mcqs')) {
+    if (_isPoll || _mcqCount > 0) {
       for (final item in (q['mcqs'] as List? ?? [])) {
         final map = Map<String, dynamic>.from(item);
         map['type'] = 'mcqs';
@@ -324,24 +298,32 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
       }
     }
 
-    if (_cats.contains('short_questions')) {
+    if (_shortCount > 0) {
       for (final item in (q['short_questions'] as List? ?? [])) {
         final map = Map<String, dynamic>.from(item);
         map['type'] = 'short_questions';
-        map['correct_answer'] = (map['correct_answer'] ?? map['answer'] ?? '')
-            .toString()
-            .trim();
+        String ans = (map['correct_answer'] ?? map['answer'] ?? '').toString().trim();
+        if (ans.isEmpty && map['keywords'] is List) {
+          ans = (map['keywords'] as List).join(', ');
+        } else if (ans.isEmpty && map['context'] != null) {
+          ans = map['context'].toString().trim();
+        }
+        map['correct_answer'] = ans;
         _questions.add(map);
       }
     }
 
-    if (_cats.contains('fill_blanks')) {
+    if (_fillCount > 0) {
       for (final item in (q['fill_blanks'] as List? ?? [])) {
         final map = Map<String, dynamic>.from(item);
         map['type'] = 'fill_blanks';
-        map['correct_answer'] = (map['correct_answer'] ?? map['answer'] ?? '')
-            .toString()
-            .trim();
+        String ans = (map['correct_answer'] ?? map['answer'] ?? '').toString().trim();
+        if (ans.isEmpty && map['keywords'] is List) {
+          ans = (map['keywords'] as List).join(', ');
+        } else if (ans.isEmpty && map['context'] != null) {
+          ans = map['context'].toString().trim();
+        }
+        map['correct_answer'] = ans;
         _questions.add(map);
       }
     }
@@ -361,6 +343,15 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
   Future<void> _save() async {
     if (_questions.isEmpty) {
       _snack('No questions to save', error: true);
+      return;
+    }
+    if (_marksCtrl.text.trim().isEmpty) {
+      _snack('Enter total marks', error: true);
+      return;
+    }
+    final totalMarks = int.tryParse(_marksCtrl.text.trim());
+    if (totalMarks == null || totalMarks <= 0) {
+      _snack('Total marks must be a valid positive number', error: true);
       return;
     }
     HapticFeedback.mediumImpact();
@@ -420,6 +411,7 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
       'difficulty': _difficulty,
       'is_poll': _isPoll,
       'num_questions': _questions.length,
+      'total_marks': totalMarks,
       'questions': qs,
     };
 
@@ -429,12 +421,30 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
         : await _ctrl.saveQuiz(payload);
 
     if (ok) {
-      _snack(
-        _isPoll
-            ? 'Poll saved! Code: ${_ctrl.savedQuizCode}'
-            : 'Saved! Code: ${_ctrl.savedQuizCode}',
+      final code = _ctrl.savedQuizCode ?? '';
+
+      // ── Send Quiz Scheduled FCM Notification ──
+      FCMSenderService.sendQuizScheduledNotification(
+        courseId: widget.course.id,
+        quizName: _nameCtrl.text.trim(),
+        courseName: widget.course.courseTitle,
+        quizDate: _fmtDateReadable(_date!),
+        startTime: _fmt12(_startTime, '09:00 AM'),
+        endTime: _fmt12(_endTime, '10:00 AM'),
+        isPoll: _isPoll,
       );
-      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _QuizCodeDialog(
+            code: code,
+            isPoll: _isPoll,
+          ),
+        );
+        if (mounted) Navigator.pop(context);
+      }
     } else {
       _snack(
         _ctrl.saveError ?? (_isPoll ? 'Poll save failed' : 'Save failed'),
@@ -516,9 +526,39 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                             enabled: !generating && !saving,
                           ),
                           const SizedBox(height: 12),
-                          _label('Topic *'),
-                          const SizedBox(height: 5),
-                          _buildTopicField(enabled: !generating && !saving),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _label('Topic *'),
+                                    const SizedBox(height: 5),
+                                    _buildTopicField(enabled: !generating && !saving),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 1,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _label('Total Marks *'),
+                                    const SizedBox(height: 5),
+                                    _tf(
+                                      _marksCtrl,
+                                      'e.g. 50',
+                                      Icons.score_outlined,
+                                      enabled: !generating && !saving,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 12),
                           _label('Description'),
                           const SizedBox(height: 5),
@@ -633,212 +673,8 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                             }).toList(),
                           ),
                           const SizedBox(height: 14),
-                          // Poll mein: slider Short/Fill ke liye (MCQs 100 fixed)
-                          // Normal mein: slider sab types ke liye
-                          AnimatedOpacity(
-                            duration: const Duration(milliseconds: 250),
-                            // Poll mein slider sirf tab useful hai jab Short ya Fill selected ho
-                            opacity: (_isPoll && !_cats.any((t) => t != 'mcqs'))
-                                ? 0.35
-                                : 1.0,
-                            child: IgnorePointer(
-                              // Poll mein sirf MCQ selected hai to slider useless — disable
-                              ignoring: (_isPoll && !_cats.any((t) => t != 'mcqs'))
-                                  || generating || saving,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: _label(
-                                          _isPoll
-                                              ? 'Short / Fill Questions Count'
-                                              : 'Number of Questions',
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      AnimatedContainer(
-                                        duration: const Duration(milliseconds: 220),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primaryBg,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: AppTheme.primary.withOpacity(0.25),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '$_numQuestions',
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppTheme.primary,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  SliderTheme(
-                                    data: SliderThemeData(
-                                      trackHeight: 4,
-                                      thumbShape: const RoundSliderThumbShape(
-                                        enabledThumbRadius: 8,
-                                      ),
-                                      overlayShape: const RoundSliderOverlayShape(
-                                        overlayRadius: 16,
-                                      ),
-                                      activeTrackColor: AppTheme.primary,
-                                      inactiveTrackColor: AppTheme.border,
-                                      thumbColor: AppTheme.primary,
-                                      overlayColor: AppTheme.primary.withOpacity(0.12),
-                                    ),
-                                    child: Slider(
-                                      value: _numQuestions.toDouble(),
-                                      min: 1,
-                                      max: 20,
-                                      divisions: 19,
-                                      onChanged: (generating || saving)
-                                          ? null
-                                          : (v) => setState(
-                                              () => _numQuestions = v.round()),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          // ── Per-type breakdown hint ────────────────────
-                          if (_isPoll) ...[
-                            // Poll: MCQs 100 fixed pill + leftover counts
-                            const SizedBox(height: 6),
-                            Builder(builder: (_) {
-                              final leftover = _cats.where((t) => t != 'mcqs').toList();
-                              final n = leftover.length;
-                              final labels = {
-                                'short_questions': 'Short',
-                                'fill_blanks': 'Fill',
-                              };
-                              final leftoverCounts = <String, int>{};
-                              if (n > 0) {
-                                final base = _numQuestions ~/ n;
-                                final extra = _numQuestions % n;
-                                for (int i = 0; i < n; i++) {
-                                  leftoverCounts[leftover[i]] =
-                                      base + (i < extra ? 1 : 0);
-                                }
-                              }
-                              return Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  // MCQs 100 fixed pill
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 9, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primaryBg,
-                                      borderRadius: BorderRadius.circular(50),
-                                      border: Border.all(
-                                          color: AppTheme.primary.withOpacity(0.3),
-                                          width: 1.2),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.lock_rounded,
-                                            size: 9, color: AppTheme.primary),
-                                        const SizedBox(width: 4),
-                                        Text('100 MCQ',
-                                            style: const TextStyle(
-                                                fontSize: 11,
-                                                color: AppTheme.primary,
-                                                fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                  ),
-                                  // Short/Fill pills
-                                  ...leftoverCounts.entries.map((e) =>
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 9, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.bg,
-                                          borderRadius:
-                                          BorderRadius.circular(50),
-                                          border: Border.all(
-                                              color: AppTheme.border,
-                                              width: 1.2),
-                                        ),
-                                        child: Text(
-                                          '${e.value} ${labels[e.key] ?? e.key}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Theme.of(context).brightness ==
-                                                Brightness.dark
-                                                ? AppTheme.darkText3
-                                                : AppTheme.text3,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      )),
-                                ],
-                              );
-                            }),
-                            const SizedBox(height: 4),
-                          ] else if (_cats.length > 1) ...[
-                            // Normal quiz: sab types ka breakdown
-                            const SizedBox(height: 2),
-                            Builder(
-                              builder: (_) {
-                                final counts = _perTypeCount();
-                                final labels = {
-                                  'mcqs': 'MCQ',
-                                  'short_questions': 'Short',
-                                  'fill_blanks': 'Fill',
-                                };
-                                return Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  children: counts.entries
-                                      .map(
-                                        (e) => Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 9, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.bg,
-                                        borderRadius:
-                                        BorderRadius.circular(50),
-                                        border: Border.all(
-                                            color: AppTheme.border,
-                                            width: 1.2),
-                                      ),
-                                      child: Text(
-                                        '${e.value} ${labels[e.key] ?? e.key}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Theme.of(context)
-                                              .brightness ==
-                                              Brightness.dark
-                                              ? AppTheme.darkText3
-                                              : AppTheme.text3,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                      .toList(),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 4),
-                          ],
-                          const SizedBox(height: 4),
+                          
                           // ── Poll Toggle ────────────────────────────
-                          const SizedBox(height: 6),
                           _PollToggleTile(
                             isPoll: _isPoll,
                             onChanged: (val) {
@@ -846,121 +682,47 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                               setState(() {
                                 _isPoll = val;
                                 if (val) {
-                                  // Poll ON: MCQs hamesha selected rehni chahiye
-                                  _cats.add('mcqs');
+                                  _mcqCount = 100; // Poll ON: MCQs forced to 100
                                 }
                               });
                               HapticFeedback.selectionClick();
                             },
                           ),
-                          const SizedBox(height: 14),
-                          _label(
-                            _isPoll
-                                ? 'Question Types (MCQs: 100 fixed)'
-                                : 'Question Types *',
-                          ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 20),
+                          
+                          _label('Select Question Counts *'),
+                          const SizedBox(height: 10),
+                          
+                          // Custom steppers for each question type
                           IgnorePointer(
                             ignoring: generating || saving,
-                            child: Wrap(
-                              spacing: 7,
-                              runSpacing: 7,
+                            child: Column(
                               children: [
-                                // ── MCQs chip ─────────────────────────────
-                                // Poll mein: always selected + disabled
-                                // Normal mein: freely toggleable
-                                (
-                                'mcqs',
-                                _isPoll ? 'MCQs (100 fixed)' : 'MCQs',
-                                AppTheme.primary,
-                                AppTheme.primaryBg,
+                                _buildCounter(
+                                  label: 'Multiple Choice (MCQs)',
+                                  value: _isPoll ? 100 : _mcqCount,
+                                  color: AppTheme.primary,
+                                  locked: _isPoll,
+                                  hint: _isPoll ? 'Fixed to 100 for polls' : null,
+                                  onChanged: (v) => setState(() => _mcqCount = v),
                                 ),
-                                (
-                                'short_questions',
-                                'Short Answer',
-                                AppTheme.green,
-                                AppTheme.greenBg,
+                                const SizedBox(height: 6),
+                                _buildCounter(
+                                  label: 'Short Answer Questions',
+                                  value: _shortCount,
+                                  color: AppTheme.green,
+                                  locked: false,
+                                  onChanged: (v) => setState(() => _shortCount = v),
                                 ),
-                                (
-                                'fill_blanks',
-                                'Fill Blanks',
-                                AppTheme.violet,
-                                AppTheme.violetBg,
+                                const SizedBox(height: 6),
+                                _buildCounter(
+                                  label: 'Fill in the Blanks',
+                                  value: _fillCount,
+                                  color: AppTheme.violet,
+                                  locked: false,
+                                  onChanged: (v) => setState(() => _fillCount = v),
                                 ),
-                              ].map((c) {
-                                final isMcq = c.$1 == 'mcqs';
-                                final sel = _cats.contains(c.$1);
-                                // Poll mein MCQs hamesha selected + non-tappable
-                                final isLockedInPoll = _isPoll && isMcq;
-                                return GestureDetector(
-                                  onTap: (generating || saving || isLockedInPoll)
-                                      ? null
-                                      : () => setState(
-                                        () => sel
-                                        ? _cats.remove(c.$1)
-                                        : _cats.add(c.$1),
-                                  ),
-                                  child: AnimatedOpacity(
-                                    duration: const Duration(milliseconds: 200),
-                                    opacity: isLockedInPoll ? 0.60 : 1.0,
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 180),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 7,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: sel
-                                            ? c.$4
-                                            : (Theme.of(context).brightness ==
-                                            Brightness.dark
-                                            ? AppTheme.darkInput
-                                            : const Color(0xFFF2F6FC)),
-                                        borderRadius: BorderRadius.circular(50),
-                                        border: Border.all(
-                                          color: sel
-                                              ? c.$3
-                                              : (Theme.of(context).brightness ==
-                                              Brightness.dark
-                                              ? AppTheme.darkBorder
-                                              : AppTheme.border),
-                                          width: sel ? 1.5 : 1.2,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (sel) ...[
-                                            Icon(
-                                              isLockedInPoll
-                                                  ? Icons.lock_rounded
-                                                  : Icons.check_rounded,
-                                              size: 12,
-                                              color: c.$3,
-                                            ),
-                                            const SizedBox(width: 4),
-                                          ],
-                                          Text(
-                                            c.$2,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: sel
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w400,
-                                              color: sel
-                                                  ? c.$3
-                                                  : (Theme.of(context).brightness ==
-                                                  Brightness.dark
-                                                  ? AppTheme.darkText3
-                                                  : AppTheme.text3),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
+                              ],
                             ),
                           ),
                         ],
@@ -1385,6 +1147,102 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
           : label,
     ),
   );
+  Widget _buildCounter({
+    required String label,
+    required int value,
+    required Color color,
+    required bool locked,
+    String? hint,
+    required ValueChanged<int> onChanged,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: locked ? 0.55 : 1.0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                      ),
+                    ),
+                    if (hint != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        hint,
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: AppTheme.text3,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Count badge
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: value > 0 ? color.withOpacity(0.12) : (isDark ? AppTheme.darkInput : AppTheme.bg),
+                  borderRadius: BorderRadius.circular(50),
+                  border: Border.all(
+                    color: value > 0 ? color.withOpacity(0.35) : (isDark ? AppTheme.darkBorder : AppTheme.border),
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  locked ? '100 (fixed)' : '$value',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: value > 0 || locked ? color : (isDark ? AppTheme.darkText3 : AppTheme.text3),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 5,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+              activeTrackColor: color,
+              inactiveTrackColor: color.withOpacity(0.15),
+              thumbColor: color,
+              overlayColor: color.withOpacity(0.12),
+              disabledActiveTrackColor: color.withOpacity(0.4),
+              disabledThumbColor: color.withOpacity(0.4),
+              disabledInactiveTrackColor: color.withOpacity(0.1),
+            ),
+            child: Slider(
+              value: locked ? 100.0 : value.toDouble(),
+              min: 0,
+              max: 30,
+              divisions: 30,
+              onChanged: locked
+                  ? null
+                  : (v) {
+                      HapticFeedback.selectionClick();
+                      onChanged(v.round());
+                    },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _pickerBox(IconData icon, String label) {
     final isSmall = MediaQuery.of(context).size.width < 400;
@@ -3326,7 +3184,7 @@ class _ReviewQuestionCardState extends State<_ReviewQuestionCard> {
         ...opts.asMap().entries.map((e) {
           final label = e.key < labels.length ? labels[e.key] : '?';
           final text = e.value?.toString() ?? '';
-          final isC = text.isNotEmpty && text == correct;
+          final isC = (text.isNotEmpty && text == correct) || label == correct;
           return Container(
             margin: const EdgeInsets.only(bottom: 5),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -3387,7 +3245,7 @@ class _ReviewQuestionCardState extends State<_ReviewQuestionCard> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text(
-        'MODEL ANSWER',
+        'EXPECTED KEYWORDS',
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
@@ -3702,9 +3560,11 @@ class _EditQuestionDialogState extends State<_EditQuestionDialog> {
                 );
               }),
             ] else ...[
-              const Text(
-                'Answer',
-                style: TextStyle(
+              Text(
+                widget.question['type'] == 'short_questions'
+                    ? 'Keywords (comma separated)'
+                    : 'Answer',
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: AppTheme.text2,
@@ -3713,9 +3573,13 @@ class _EditQuestionDialogState extends State<_EditQuestionDialog> {
               const SizedBox(height: 6),
               TextField(
                 controller: _ansCtrl,
-                maxLines: 2,
+                maxLines: widget.question['type'] == 'short_questions' ? 3 : 2,
                 style: const TextStyle(fontSize: 13, color: AppTheme.text1),
-                decoration: _inputDec('Enter correct answer'),
+                decoration: _inputDec(
+                  widget.question['type'] == 'short_questions'
+                      ? 'e.g. keyword1, keyword2, concept...'
+                      : 'Enter correct answer',
+                ),
               ),
             ],
 
@@ -3837,4 +3701,275 @@ class _EditQuestionDialogState extends State<_EditQuestionDialog> {
         ? AppTheme.darkInput
         : const Color(0xFFF2F6FC),
   );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Quiz Code Dialog — shown after successful quiz/poll save
+// ═══════════════════════════════════════════════════════════════
+class _QuizCodeDialog extends StatefulWidget {
+  final String code;
+  final bool isPoll;
+  const _QuizCodeDialog({required this.code, required this.isPoll});
+
+  @override
+  State<_QuizCodeDialog> createState() => _QuizCodeDialogState();
+}
+
+class _QuizCodeDialogState extends State<_QuizCodeDialog>
+    with SingleTickerProviderStateMixin {
+  bool _copied = false;
+
+  void _copy() {
+    Clipboard.setData(ClipboardData(text: widget.code));
+    HapticFeedback.lightImpact();
+    setState(() => _copied = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPoll = widget.isPoll;
+    final accent = isPoll ? AppTheme.violet : AppTheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.darkSurface : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withOpacity(0.18),
+              blurRadius: 32,
+              spreadRadius: 2,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Gradient header ─────────────────────────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              decoration: BoxDecoration(
+                gradient: isPoll
+                    ? const LinearGradient(
+                        colors: [Color(0xFF6A1B9A), Color(0xFF9C27B0)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : AppTheme.heroGrad,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isPoll
+                          ? Icons.poll_rounded
+                          : Icons.check_circle_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    isPoll ? 'Poll Saved!' : 'Quiz Saved!',
+                    style: GoogleFonts.outfit(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isPoll
+                        ? 'Share this code with students'
+                        : 'Share this code with students',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.82),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Code section ────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              child: Column(
+                children: [
+                  Text(
+                    isPoll ? 'Poll Code' : 'Quiz Code',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Code box with copy button
+                  GestureDetector(
+                    onTap: _copy,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: _copied
+                            ? accent.withOpacity(0.10)
+                            : (isDark
+                                ? AppTheme.darkInput
+                                : const Color(0xFFF4F6FB)),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _copied
+                              ? accent.withOpacity(0.5)
+                              : (isDark
+                                  ? AppTheme.darkBorder
+                                  : AppTheme.border),
+                          width: _copied ? 1.8 : 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.code,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: _copied
+                                    ? accent
+                                    : (isDark
+                                        ? AppTheme.darkText1
+                                        : AppTheme.text1),
+                                letterSpacing: 3,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _copied
+                                ? Icon(Icons.check_circle_rounded,
+                                    key: const ValueKey('check'),
+                                    color: accent,
+                                    size: 22)
+                                : Icon(Icons.copy_rounded,
+                                    key: const ValueKey('copy'),
+                                    color: isDark
+                                        ? AppTheme.darkText3
+                                        : AppTheme.text3,
+                                    size: 20),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+                  AnimatedOpacity(
+                    opacity: _copied ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Text(
+                      'Copied to clipboard!',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Done button ──────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _copy,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: accent,
+                        side: BorderSide(color: accent.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.copy_rounded, size: 16, color: accent),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Copy Code',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      child: Text(
+                        'Done',
+                        style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate().scale(
+          begin: const Offset(0.85, 0.85),
+          end: const Offset(1, 1),
+          duration: 280.ms,
+          curve: Curves.easeOutBack,
+        );
+  }
 }

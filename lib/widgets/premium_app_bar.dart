@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/app_theme.dart';
 import '../utils/theme_controller.dart';
 import '../views/login_screen.dart';
+import '../services/fcm_sender_service.dart';
 
 /// Premium gradient app bar with:
 ///   • Curved wave bottom edge
@@ -43,142 +45,167 @@ class PremiumAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipPath(
-      clipper: _WaveClipper(),
-      child: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.appBarGrad),
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                child: Row(
-                  children: [
-                    // ── Leading ─────────────────────────────────
-                    if (showBack)
-                      _GlassIconButton(
-                        icon: Icons.arrow_back_ios_new_rounded,
-                        size: 14,
-                        onTap: onLeadingTap ?? () => Navigator.pop(context),
-                      )
-                    else if (initials != null)
-                      _AvatarBadge(initials: initials!)
-                    else
-                      const SizedBox(width: 4),
+    final hasSubtitle = subtitle != null;
+    final totalHeight = 96.0 + (hasSubtitle ? 16.0 : 0.0);
 
-                    const SizedBox(width: 12),
+    return Stack(
+      children: [
+        // Layer 1: Ambient Neon Curved Aura Shadow Underline
+        ClipPath(
+          clipper: _WaveClipper(offsetY: 3.5),
+          child: Container(
+            height: totalHeight + 32,
+            color: Colors.black.withOpacity(0.09),
+          ),
+        ),
+        // Layer 2: Main Premium App Bar with active metallic shimmer sweep
+        ClipPath(
+          clipper: _WaveClipper(),
+          child: Container(
+            decoration: const BoxDecoration(gradient: AppTheme.appBarGrad),
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                    child: Row(
+                      children: [
+                        // ── Leading ─────────────────────────────────
+                        if (showBack)
+                          _GlassIconButton(
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            size: 14,
+                            onTap: onLeadingTap ?? () => Navigator.pop(context),
+                          )
+                        else if (initials != null)
+                          GestureDetector(
+                            onTap: onLeadingTap,
+                            child: _AvatarBadge(initials: initials!),
+                          )
+                        else
+                          const SizedBox(width: 4),
 
-                    // ── Title block ──────────────────────────────
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
+                        const SizedBox(width: 12),
+
+                        // ── Title block ──────────────────────────────
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  title,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                    letterSpacing: -0.2,
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      title,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                        letterSpacing: -0.2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                  if (tag != null) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: (tagColor ?? AppTheme.primaryLighter)
+                                            .withOpacity(0.22),
+                                        borderRadius: BorderRadius.circular(50),
+                                        border: Border.all(
+                                          color: (tagColor ?? AppTheme.primaryLighter)
+                                              .withOpacity(0.45),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        tag!,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: tagColor ?? AppTheme.primaryLighter,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                              if (tag != null) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: (tagColor ?? AppTheme.primaryLighter)
-                                        .withOpacity(0.22),
-                                    borderRadius: BorderRadius.circular(50),
-                                    border: Border.all(
-                                      color: (tagColor ?? AppTheme.primaryLighter)
-                                          .withOpacity(0.45),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    tag!,
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: tagColor ?? AppTheme.primaryLighter,
-                                    ),
+                              if (subtitle != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle!,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: Colors.white.withOpacity(0.68),
                                   ),
                                 ),
                               ],
                             ],
                           ),
-                          if (subtitle != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitle!,
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                color: Colors.white.withOpacity(0.68),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    // ── Theme toggle ─────────────────────────────
-                    if (showThemeToggle) ...[
-                      const SizedBox(width: 8),
-                      ValueListenableBuilder<ThemeMode>(
-                        valueListenable: themeNotifier,
-                        builder: (_, mode, __) => _GlassIconButton(
-                          icon: mode == ThemeMode.dark
-                              ? Icons.light_mode_rounded
-                              : Icons.dark_mode_rounded,
-                          size: 18,
-                          onTap: toggleTheme,
                         ),
-                      ),
-                    ],
 
-                    // ── Logout button ────────────────────────────
-                    if (showLogout) ...[
-                      const SizedBox(width: 8),
-                      _GlassIconButton(
-                        icon: Icons.logout_rounded,
-                        size: 18,
-                        onTap: () => _confirmLogout(context),
-                      ),
-                    ],
+                        // ── Theme toggle ─────────────────────────────
+                        if (showThemeToggle) ...[
+                          const SizedBox(width: 8),
+                          ValueListenableBuilder<ThemeMode>(
+                            valueListenable: themeNotifier,
+                            builder: (_, mode, __) => _GlassIconButton(
+                              icon: mode == ThemeMode.dark
+                                  ? Icons.light_mode_rounded
+                                  : Icons.dark_mode_rounded,
+                              size: 18,
+                              onTap: toggleTheme,
+                            ),
+                          ),
+                        ],
 
-                    // ── Action button ────────────────────────────
-                    if (actionIcon != null) ...[
-                      const SizedBox(width: 8),
-                      _GlassIconButton(
-                        icon: actionIcon!,
-                        onTap: onActionTap ?? () {},
-                      ),
-                    ],
-                  ],
-                ),
+                        // ── Logout button ────────────────────────────
+                        if (showLogout) ...[
+                          const SizedBox(width: 8),
+                          _GlassIconButton(
+                            icon: Icons.logout_rounded,
+                            size: 18,
+                            onTap: () => _confirmLogout(context),
+                          ),
+                        ],
+
+                        // ── Action button ────────────────────────────
+                        if (actionIcon != null) ...[
+                          const SizedBox(width: 8),
+                          _GlassIconButton(
+                            icon: actionIcon!,
+                            onTap: onActionTap ?? () {},
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // Extra space carved out by wave clipper
+                  const SizedBox(height: 22),
+                ],
               ),
-
-              // Extra space carved out by the wave clipper
-              const SizedBox(height: 22),
-            ],
+            ),
           ),
-        ),
-      ),
-    )
-        .animate()
-        .slideY(begin: -0.7, end: 0, duration: 380.ms, curve: Curves.easeOut)
-        .fadeIn(duration: 380.ms);
+        )
+            .animate()
+            .shimmer(
+              duration: 3000.ms,
+              color: Colors.white.withOpacity(0.15),
+              size: 0.40,
+            )
+            .animate()
+            .slideY(begin: -0.7, end: 0, duration: 380.ms, curve: Curves.easeOut)
+            .fadeIn(duration: 380.ms),
+      ],
+    );
   }
 }
 
@@ -230,18 +257,24 @@ void _confirmLogout(BuildContext context) {
                   fontWeight: FontWeight.w600)),
         ),
         TextButton(
-          onPressed: () {
+          onPressed: () async {
             Navigator.pop(context); // close dialog
+            // Clear login session
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('user_session');
+            await FCMSenderService.clearFCMData();
             // Login screen pe wapas — sab routes hata do
-            Navigator.of(context).pushAndRemoveUntil(
-              PageRouteBuilder(
-                pageBuilder: (_, a, __) => const LoginScreen(),
-                transitionsBuilder: (_, a, __, child) =>
-                    FadeTransition(opacity: a, child: child),
-                transitionDuration: const Duration(milliseconds: 300),
-              ),
-                  (route) => false,
-            );
+            if (context.mounted) {
+              Navigator.of(context).pushAndRemoveUntil(
+                PageRouteBuilder(
+                  pageBuilder: (_, a, __) => const LoginScreen(),
+                  transitionsBuilder: (_, a, __, child) =>
+                      FadeTransition(opacity: a, child: child),
+                  transitionDuration: const Duration(milliseconds: 300),
+                ),
+                    (route) => false,
+              );
+            }
           },
           child: Text('Logout',
               style: GoogleFonts.outfit(
@@ -256,17 +289,18 @@ void _confirmLogout(BuildContext context) {
 
 // ── Wave-curve bottom clipper ─────────────────────────────────────
 class _WaveClipper extends CustomClipper<Path> {
+  final double offsetY;
+  const _WaveClipper({this.offsetY = 0});
+
   @override
   Path getClip(Size size) {
     final path = Path();
-    // Start from top-left
-    path.lineTo(0, size.height - 22);
-    // Gentle convex curve: dips slightly in the center
+    path.lineTo(0, size.height - 22 + offsetY);
     path.quadraticBezierTo(
-      size.width * 0.5,  // control point x (center)
-      size.height + 6,   // control point y (below edge = convex)
-      size.width,        // end x
-      size.height - 22,  // end y
+      size.width * 0.5,
+      size.height + 6 + offsetY,
+      size.width,
+      size.height - 22 + offsetY,
     );
     path.lineTo(size.width, 0);
     path.close();
@@ -274,7 +308,7 @@ class _WaveClipper extends CustomClipper<Path> {
   }
 
   @override
-  bool shouldReclip(covariant _WaveClipper old) => false;
+  bool shouldReclip(covariant _WaveClipper old) => old.offsetY != offsetY;
 }
 
 // ── Glass icon button ─────────────────────────────────────────────

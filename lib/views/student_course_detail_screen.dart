@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -6,9 +7,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/app_theme.dart';
 import '../services/student_service.dart';
+import '../services/teacher_service.dart';
 import '../models/quiz_model.dart';
+import '../widgets/premium_app_bar.dart';
 import 'student_quiz_screen.dart';
-
+import 'student_results_screen.dart';
 // ══════════════════════════════════════════════════════════════════
 // STUDENT COURSE DETAIL SCREEN
 // Shows quiz code entry box + attempts history
@@ -40,53 +43,15 @@ class _StudentCourseDetailScreenState
   bool _loading = false;
   String? _error;
 
-  // Attempts history
-  List<Map<String, dynamic>> _attempts = [];
-  bool _loadingAttempts = false;
-
   @override
   void initState() {
     super.initState();
-    _loadAttempts();
   }
 
   @override
   void dispose() {
     _codeCtrl.dispose();
     super.dispose();
-  }
-
-  // ── Load attempts history from API ───────────────────────────
-  Future<void> _loadAttempts() async {
-    // Attempts only load after a quiz code is submitted
-    // We'll refresh this after each quiz attempt
-  }
-
-  Future<void> _loadAttemptsForCode(String code) async {
-    setState(() => _loadingAttempts = true);
-    try {
-      final result = await StudentService().fetchQuizAttemptsList(code);
-      if (!mounted) return;
-      if (result['success'] == true) {
-        final data = result['data'];
-        List<Map<String, dynamic>> list = [];
-        if (data is List) {
-          list = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        } else if (data is Map && data['attempts'] is List) {
-          list = (data['attempts'] as List)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-        }
-        setState(() {
-          _attempts = list;
-          _loadingAttempts = false;
-        });
-      } else {
-        setState(() => _loadingAttempts = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingAttempts = false);
-    }
   }
 
   // ── Parse date+time safely (handles HH:MM and H:MM formats) ──
@@ -113,9 +78,6 @@ class _StudentCourseDetailScreenState
     required String code,
     required DateTime? endDt,
   }) async {
-    // Load attempts history in background
-    _loadAttemptsForCode(code);
-
     if (!mounted) return;
     await Navigator.push(context, MaterialPageRoute(
       builder: (_) => StudentQuizSolveScreen(
@@ -124,11 +86,9 @@ class _StudentCourseDetailScreenState
         studentId: widget.studentId,
         studentName: widget.studentName,
         endTime: endDt,
+        courseId: widget.course.id,
       ),
     ));
-
-    // Refresh attempts after returning from quiz
-    if (mounted) _loadAttemptsForCode(code);
   }
 
   // ── Show elegant preview bottom sheet ─────────────────────────
@@ -538,6 +498,240 @@ class _StudentCourseDetailScreenState
     );
   }
 
+  void _showAlreadyAttemptedSheet({
+    required FullQuiz fullQuiz,
+    required String code,
+    required Map<String, dynamic>? resultData,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = widget.accentColor;
+    
+    final isUnlocked = resultData != null && resultData['status'] == true;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkSurface : AppTheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 14,
+            bottom: MediaQuery.of(context).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.darkBorder : AppTheme.border,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Header Icon
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: isUnlocked 
+                      ? AppTheme.greenDark.withOpacity(0.12)
+                      : AppTheme.amber.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isUnlocked ? Icons.verified_user_rounded : Icons.lock_clock_rounded,
+                  color: isUnlocked ? AppTheme.greenDark : AppTheme.amber,
+                  size: 36,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              Text(
+                isUnlocked ? 'Quiz Results Available!' : 'Quiz Attempt Submitted',
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              
+              Text(
+                isUnlocked 
+                    ? 'You have already attempted this quiz. You can view your detailed performance below.'
+                    : 'You have completed this quiz early. The results will unlock once the quiz timer ends.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Score box or Unlock window box
+              if (isUnlocked)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.greenDark.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.greenDark.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Your Percentage:',
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppTheme.darkText2 : AppTheme.text2,
+                        ),
+                      ),
+                      Text(
+                        '${resultData['percentage'] ?? resultData['data']?['percentage'] ?? '—'}%',
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.greenDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (resultData != null && resultData['unlock_time'] != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.amber.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.amber.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'RELEASE TIME',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.amber,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        resultData['unlock_time']?.toString() ?? 'After quiz ends',
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+              const SizedBox(height: 24),
+              
+              // Action buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.border),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: Text(
+                          'Close',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppTheme.darkText2 : AppTheme.text2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: 50,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: isUnlocked ? AppTheme.greenGrad : AppTheme.primaryGrad,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: AppTheme.glowShadow(isUnlocked ? AppTheme.greenDark : AppTheme.primary),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            onTap: () {
+                              Navigator.pop(context); // Close sheet
+                              Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => StudentQuizSolveScreen(
+                                  quiz: fullQuiz,
+                                  quizCode: code,
+                                  studentId: widget.studentId,
+                                  studentName: widget.studentName,
+                                  isReadOnlyResult: true,
+                                  initialResultData: resultData,
+                                  courseId: widget.course.id,
+                                ),
+                              ));
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: Center(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    isUnlocked ? Icons.analytics_rounded : Icons.lock_open_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isUnlocked ? 'VIEW PERFORMANCE' : 'CHECK STATUS',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // ── Join quiz by code ────────────────────────────────────────
   Future<void> _joinQuiz() async {
     final code = _codeCtrl.text.trim().toUpperCase();
@@ -564,6 +758,26 @@ class _StudentCourseDetailScreenState
       final data = result['data'] as Map<String, dynamic>;
       final fullQuiz = FullQuiz.fromJson(data);
 
+      // ── COURSE VALIDATION: quiz must belong to THIS course ──────
+      // Prevents a student from using a different course's quiz code here
+      int courseIdVal = fullQuiz.courseId;
+      if (courseIdVal == 0) {
+        // Fallback: Fetch quiz detail by code to verify course ID
+        final quizDetails = await TeacherService().fetchQuizByCode(code);
+        if (quizDetails['success'] == true && quizDetails['data'] is FullQuiz) {
+          courseIdVal = (quizDetails['data'] as FullQuiz).courseId;
+        }
+      }
+
+      if (courseIdVal != 0 && courseIdVal != widget.course.id) {
+        setState(() {
+          _loading = false;
+          _error = 'This quiz code belongs to a different course. '  
+                   'Please enter the code for ${widget.course.courseTitle}.';
+        });
+        return;
+      }
+
       // Check if student has already successfully submitted this quiz
       final prefs = await SharedPreferences.getInstance();
       final localSubmitted = prefs.getBool('quiz_submitted_${widget.studentId}_${fullQuiz.quizId}') ?? false;
@@ -580,14 +794,19 @@ class _StudentCourseDetailScreenState
           list = data['attempts'];
         }
         
-        // Filter attempts specifically belonging to this student that are completed
-        final studentCompletedAttempts = list.where((attempt) {
+        // Filter attempts specifically belonging to this student
+        // Block re-entry for: submitted, abandoned, started (already entered the quiz)
+        final studentBlockedAttempts = list.where((attempt) {
           if (attempt is Map) {
             final sId = attempt['student_id'] ?? attempt['user_id'] ?? attempt['student']?['id'];
             if (sId?.toString() == widget.studentId.toString()) {
               final status = (attempt['status'] ?? '').toString().toLowerCase();
               final hasScore = attempt['score'] != null || attempt['marks'] != null || attempt['obtained_marks'] != null;
-              if (status == 'completed' || status == 'submitted' || hasScore) {
+              // Block if submitted or abandoned (explicitly left without submitting).
+              // NOTE: 'started' is NOT blocked — the POST /api/quiz-attempt itself
+              // sets status='started', so blocking it would prevent first-time entry.
+              if (status == 'submitted' || status == 'completed' ||
+                  status == 'abandoned' || hasScore) {
                 return true;
               }
             }
@@ -595,7 +814,7 @@ class _StudentCourseDetailScreenState
           return false;
         }).toList();
         
-        if (studentCompletedAttempts.isNotEmpty) {
+        if (studentBlockedAttempts.isNotEmpty) {
           serverSubmitted = true;
         }
       }
@@ -620,29 +839,13 @@ class _StudentCourseDetailScreenState
       final apiUnlocked = checkResult['status'] == true;
       
       if (localSubmitted || serverSubmitted || apiUnlocked) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('You have already submitted this quiz. Showing your results.',
-              style: GoogleFonts.outfit(fontSize: 13, color: Colors.white)),
-          backgroundColor: AppTheme.amber,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-        ));
-        
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StudentQuizSolveScreen(
-              quiz: fullQuiz,
-              quizCode: code,
-              studentId: widget.studentId,
-              studentName: widget.studentName,
-              isReadOnlyResult: true,
-              initialResultData: checkResult,
-            ),
-          ),
+        setState(() {
+          _loading = false;
+        });
+        _showAlreadyAttemptedSheet(
+          fullQuiz: fullQuiz,
+          code: code,
+          resultData: checkResult,
         );
         return;
       }
@@ -662,13 +865,31 @@ class _StudentCourseDetailScreenState
       final endTime  = data['end_time']?.toString() ?? '';
       final startTime = data['start_time']?.toString() ?? '';
       DateTime? endDt;
+      DateTime? startDt;
       if (quizDate.isNotEmpty && endTime.isNotEmpty) {
         endDt = _parseDateTime(quizDate, endTime);
-        final startDt = _parseDateTime(quizDate, startTime);
+        startDt = _parseDateTime(quizDate, startTime);
         // Midnight crossing — end before start means next day
         if (startDt != null && endDt != null && endDt.isBefore(startDt)) {
           endDt = endDt.add(const Duration(days: 1));
         }
+      }
+
+      // ── STRICT AUTHENTICATION (TIME CHECKS) ──
+      final now = DateTime.now();
+      if (endDt != null && now.isAfter(endDt)) {
+        setState(() {
+          _loading = false;
+          _error = 'Time over! The scheduled time for this quiz has ended.';
+        });
+        return;
+      }
+      if (startDt != null && now.isBefore(startDt)) {
+        setState(() {
+          _loading = false;
+          _error = 'Quiz has not started yet. Please wait until scheduled time.';
+        });
+        return;
       }
 
       // Show beautiful Bottom Sheet with Student Info & Start Button
@@ -703,51 +924,10 @@ class _StudentCourseDetailScreenState
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          // ── App Bar ──────────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [accent, accent.withValues(alpha: 0.78)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 10,
-              bottom: 18, left: 16, right: 16,
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 16),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.course.courseTitle,
-                          style: GoogleFonts.outfit(fontSize: 16,
-                              fontWeight: FontWeight.w800, color: Colors.white),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (widget.course.courseCode != null)
-                        Text(widget.course.courseCode!,
-                            style: GoogleFonts.outfit(fontSize: 11,
-                                color: Colors.white.withValues(alpha: 0.75))),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          PremiumAppBar(
+            title: widget.course.courseTitle,
+            subtitle: widget.course.courseCode ?? 'Course Details',
+            showBack: true,
           ),
 
           // ── Scrollable body ───────────────────────────────────
@@ -770,34 +950,109 @@ class _StudentCourseDetailScreenState
 
                   const SizedBox(height: 24),
 
-                  // ── Attempts History ──────────────────────────
-                  if (_attempts.isNotEmpty || _loadingAttempts) ...[
-                    Text('My Quiz Attempts',
-                        style: GoogleFonts.outfit(fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppTheme.darkText2 : AppTheme.text2)),
-                    const SizedBox(height: 10),
+                  // ── Past Results Button ──────────────────────────
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkSurface : AppTheme.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isDark
+                            ? AppTheme.darkBorder
+                            : accent.withValues(alpha: 0.25),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.05),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => StudentResultsScreen(
+                              studentId: widget.studentId,
+                              studentName: widget.studentName,
+                              courseId: widget.course.id, // Pass course ID!
+                            ),
+                          ));
+                        },
+                        borderRadius: BorderRadius.circular(18),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                          child: Row(
+                            children: [
+                              // Glass-styled history icon container
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      accent.withValues(alpha: 0.16),
+                                      accent.withValues(alpha: 0.04),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: accent.withValues(alpha: 0.22),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.history_rounded,
+                                  color: accent,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'View Past Results',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Check scores, keys, & performance analysis',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                color: accent,
+                                size: 14,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.08, end: 0),
 
-                    if (_loadingAttempts)
-                      Center(child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, valueColor: AlwaysStoppedAnimation(accent)),
-                      ))
-                    else
-                      ..._attempts.asMap().entries.map((e) =>
-                          _AttemptRow(
-                            attempt: e.value, 
-                            index: e.key, 
-                            accent: accent,
-                            onTap: () {
-                              _codeCtrl.text = e.value['quiz_code']?.toString() ?? '';
-                              if (_codeCtrl.text.isNotEmpty) {
-                                _joinQuiz();
-                              }
-                            },
-                          )),
-                  ],
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -835,190 +1090,342 @@ class _CodeEntryCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkSurface : AppTheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
+          color: error != null
+              ? AppTheme.red.withValues(alpha: 0.45)
+              : accent.withValues(alpha: 0.28),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
             color: error != null
-                ? AppTheme.red.withValues(alpha: 0.40)
-                : accent.withValues(alpha: 0.22),
-            width: 1.2),
-        boxShadow: AppTheme.softShadow,
+                ? AppTheme.red.withValues(alpha: 0.08)
+                : accent.withValues(alpha: 0.06),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: Column(
           children: [
-            // Accent top strip
+            // Ambient Top Gradient Accent Line
             Container(
-              height: 4,
+              height: 5,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                    colors: [accent, accent.withValues(alpha: 0.45)]),
+                  colors: [
+                    accent,
+                    accent.withValues(alpha: 0.7),
+                    accent.withValues(alpha: 0.2),
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
               ),
             ),
 
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              padding: const EdgeInsets.all(22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
-                  Row(children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                            colors: [accent, accent.withValues(alpha: 0.75)]),
-                        borderRadius: BorderRadius.circular(11),
+                  // Header Row
+                  Row(
+                    children: [
+                      // Modern Glassmorphic Icon Container
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [accent, accent.withValues(alpha: 0.70)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.25),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.vpn_key_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                      child: const Icon(Icons.vpn_key_rounded,
-                          color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Enter Quiz Code',
-                          style: GoogleFonts.outfit(fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: isDark ? AppTheme.darkText1 : AppTheme.text1)),
-                      Text('Get the code from your teacher',
-                          style: GoogleFonts.outfit(fontSize: 11,
-                              color: isDark ? AppTheme.darkText3 : AppTheme.text3)),
-                    ]),
-                  ]),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Enter Quiz Code',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark ? AppTheme.darkText1 : AppTheme.text1,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Secure Lock Badge
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: accent.withValues(alpha: 0.25),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.lock_rounded, size: 9, color: accent),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        'SECURE',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                          color: accent,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Get the unique credentials from your teacher',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: isDark ? AppTheme.darkText3 : AppTheme.text3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
 
-                  // Code input
+                  // High-tech Pin Entry TextField
                   TextField(
                     controller: controller,
                     textCapitalization: TextCapitalization.characters,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
-                      fontSize: 26, fontWeight: FontWeight.w900,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
                       color: isDark ? AppTheme.darkText1 : AppTheme.text1,
-                      letterSpacing: 8,
+                      letterSpacing: 10,
                     ),
                     decoration: InputDecoration(
-                      hintText: '· · · · · ·',
+                      hintText: '······',
                       hintStyle: GoogleFonts.outfit(
-                        fontSize: 22, fontWeight: FontWeight.w700,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
                         color: isDark ? AppTheme.darkText4 : AppTheme.text4,
-                        letterSpacing: 6,
+                        letterSpacing: 10,
                       ),
                       filled: true,
-                      fillColor: isDark ? AppTheme.darkInput : const Color(0xFFF5F7FF),
+                      fillColor: isDark
+                          ? AppTheme.darkInput.withValues(alpha: 0.5)
+                          : const Color(0xFFF3F2FD),
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Icon(
+                          Icons.tag_rounded,
+                          size: 20,
+                          color: isDark ? AppTheme.darkText4 : AppTheme.text3,
+                        ),
+                      ),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: isDark ? AppTheme.darkBorder : AppTheme.border)),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: isDark ? AppTheme.darkBorder : AppTheme.border,
+                          width: 1.2,
+                        ),
+                      ),
                       enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: isDark ? AppTheme.darkBorder : AppTheme.border)),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: isDark ? AppTheme.darkBorder : AppTheme.border,
+                          width: 1.2,
+                        ),
+                      ),
                       focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: accent, width: 2)),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: accent, width: 2),
+                      ),
                       errorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppTheme.red, width: 1.5)),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: AppTheme.red, width: 1.5),
+                      ),
                       focusedErrorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppTheme.red, width: 2)),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: AppTheme.red, width: 2),
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                      prefixIcon: Icon(Icons.tag_rounded, size: 18,
-                          color: isDark ? AppTheme.darkText4 : AppTheme.text4),
+                        horizontal: 16,
+                        vertical: 18,
+                      ),
                     ),
                     onSubmitted: (_) => onJoin(),
                     onChanged: (_) => onChanged(),
                   ),
 
-                  // Error message
+                  // Error message overlay
                   if (error != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppTheme.red.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: AppTheme.red.withValues(alpha: 0.25)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.red.withValues(alpha: 0.22), width: 1),
                       ),
-                      child: Row(children: [
-                        const Icon(Icons.info_outline_rounded,
-                            size: 16, color: AppTheme.red),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(error!,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            size: 16,
+                            color: AppTheme.red,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              error!,
                               style: GoogleFonts.outfit(
-                                  fontSize: 12, color: AppTheme.red,
-                                  fontWeight: FontWeight.w500)),
-                        ),
-                      ]),
-                    ),
+                                fontSize: 12,
+                                color: AppTheme.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().shake(duration: 400.ms, curve: Curves.easeInOut),
                   ],
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
-                  // Join button
+                  // Start Quiz Shiny Gradient Button
                   SizedBox(
-                    width: double.infinity, height: 52,
-                    child: Material(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        onTap: loading ? null : onJoin,
-                        borderRadius: BorderRadius.circular(14),
-                        child: Ink(
-                          decoration: BoxDecoration(
-                            gradient: loading ? null : LinearGradient(
-                                colors: [accent, accent.withValues(alpha: 0.80)]),
-                            color: loading
-                                ? (isDark ? AppTheme.darkInput : const Color(0xFFF0F0F0))
-                                : null,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: loading ? null : [
-                              BoxShadow(color: accent.withValues(alpha: 0.35),
-                                  blurRadius: 16, offset: const Offset(0, 6)),
-                            ],
-                          ),
+                    width: double.infinity,
+                    height: 52,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: loading
+                            ? null
+                            : LinearGradient(
+                                colors: [accent, accent.withValues(alpha: 0.80)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                        color: loading
+                            ? (isDark ? AppTheme.darkInput : const Color(0xFFF0F0F0))
+                            : null,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: loading
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: accent.withValues(alpha: 0.35),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(15),
+                        child: InkWell(
+                          onTap: loading ? null : onJoin,
+                          borderRadius: BorderRadius.circular(15),
                           child: Center(
                             child: loading
-                                ? SizedBox(width: 22, height: 22,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    valueColor: AlwaysStoppedAnimation(accent)))
-                                : Row(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(Icons.play_arrow_rounded,
-                                  color: Colors.white, size: 22),
-                              const SizedBox(width: 8),
-                              Text('Start Quiz',
-                                  style: GoogleFonts.outfit(fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white)),
-                            ]),
+                                ? SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation(accent),
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.play_arrow_rounded,
+                                        color: Colors.white,
+                                        size: 22,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Start Quiz',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+
+                                    ],
+                                  ),
                           ),
                         ),
                       ),
-                    ),
+                    )
+                        .animate(onPlay: (controller) => controller.repeat(reverse: false))
+                        .shimmer(
+                          duration: 2500.ms,
+                          color: Colors.white.withValues(alpha: 0.24),
+                          size: 0.35,
+                        ),
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
 
                   // Info note
-                  Row(children: [
-                    Icon(Icons.schedule_rounded, size: 13,
-                        color: isDark ? AppTheme.darkText4 : AppTheme.text4),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'You can only attempt the quiz during its scheduled time window.',
-                        style: GoogleFonts.outfit(fontSize: 11,
-                            color: isDark ? AppTheme.darkText4 : AppTheme.text4,
-                            fontStyle: FontStyle.italic),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 13,
+                        color: isDark ? AppTheme.darkText4 : AppTheme.text4,
                       ),
-                    ),
-                  ]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'You can only attempt the quiz during its scheduled time window.',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: isDark ? AppTheme.darkText4 : AppTheme.text4,
+                            fontWeight: FontWeight.w500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

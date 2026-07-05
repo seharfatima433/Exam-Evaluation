@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/fcm_sender_service.dart';
 
 class AuthController extends ChangeNotifier {
   final AuthService _service = AuthService();
@@ -19,6 +22,11 @@ class AuthController extends ChangeNotifier {
     isLoading = false;
     if (result['success'] == true) {
       currentUser = result['user'] as UserModel;
+      
+      // Save session
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_session', jsonEncode(result['data']));
+
       notifyListeners();
       return true;
     } else {
@@ -28,9 +36,22 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  void logout() {
+  Future<void> autoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userStr = prefs.getString('user_session');
+    if (userStr != null) {
+      final data = jsonDecode(userStr);
+      currentUser = UserModel.fromJson(data);
+      notifyListeners();
+    }
+  }
+
+  Future<void> logout() async {
     currentUser = null;
     errorMessage = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_session');
+    await FCMSenderService.clearFCMData();
     notifyListeners();
   }
 

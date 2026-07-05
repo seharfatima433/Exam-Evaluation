@@ -13,7 +13,19 @@ class StudentService {
     HttpOverrides.global = _DevOverrides();
   }
 
-  static const _headers = {'Content-Type': 'application/json'};
+  static const _headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+
+  // Safely decode JSON — throws FormatException if server returned HTML
+  dynamic _safeDecode(http.Response response) {
+    final contentType = response.headers['content-type'] ?? '';
+    if (!contentType.contains('application/json')) {
+      throw const FormatException('Server returned a non-JSON response (HTML error page)');
+    }
+    return jsonDecode(response.body);
+  }
 
   // ── GET /api/my-courses/{rollno} ──────────────────────────────
   Future<Map<String, dynamic>> fetchMyCourses(String rollNo) async {
@@ -24,7 +36,7 @@ class StudentService {
           .get(Uri.parse(url), headers: _headers)
           .timeout(ApiConstants.timeout);
       print('[StudentService] fetchMyCourses ${response.statusCode}: ${response.body}');
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = _safeDecode(response) as Map<String, dynamic>;
       if (response.statusCode == 200) {
         final List raw = data['courses'] ?? data['data'] ?? [];
         return {
@@ -49,7 +61,7 @@ class StudentService {
           .get(Uri.parse(url), headers: _headers)
           .timeout(ApiConstants.timeout);
       print('[StudentService] fetchStudentCoursesByUserId ${response.statusCode}: ${response.body}');
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = _safeDecode(response) as Map<String, dynamic>;
       if (response.statusCode == 200) {
         final List raw = data['courses'] ?? data['data'] ?? [];
         return {
@@ -77,7 +89,7 @@ class StudentService {
           .timeout(ApiConstants.timeout);
       print('[StudentService] fetchCourseQuizzes[$courseId] ${response.statusCode}: ${response.body}');
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = _safeDecode(response) as Map<String, dynamic>;
         final List raw = data['quizzes'] ?? data['data'] ?? [];
         return raw.map((q) => StudentQuiz.fromJson(q)).toList();
       }
@@ -101,7 +113,8 @@ class StudentService {
       final response = await http
           .post(Uri.parse(url), headers: _headers, body: body)
           .timeout(ApiConstants.quizTimeout);
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      print('[StudentService] loadQuizAttempt status=${response.statusCode} body=${response.body}');
+      final data = _safeDecode(response) as Map<String, dynamic>;
       final msg = data['message']?.toString() ?? '';
 
       // Only trust backend — if questions exist in response, open quiz
@@ -136,7 +149,7 @@ class StudentService {
       final response = await http
           .post(Uri.parse(ApiConstants.saveQuiz), headers: _headers, body: jsonEncode(payload))
           .timeout(ApiConstants.timeout);
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = _safeDecode(response) as Map<String, dynamic>;
       if (response.statusCode == 200) return {'success': true, 'data': data};
       return {'success': false, 'message': data['message'] ?? 'Submit nahi hua'};
     } on SocketException {
@@ -162,7 +175,7 @@ class StudentService {
         return {'success': false, 'message': 'Quiz info load nahi hui (status ${response.statusCode})'};
       }
       
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = _safeDecode(response) as Map<String, dynamic>;
       return {'success': true, 'data': data};
     } on SocketException {
       return {'success': false, 'message': 'No internet connection.'};
@@ -190,7 +203,7 @@ class StudentService {
           .post(Uri.parse(ApiConstants.quizSubmit), headers: _headers, body: body)
           .timeout(ApiConstants.timeout);
       print('[StudentService] submitQuizNew ${response.statusCode}: ${response.body}');
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = _safeDecode(response) as Map<String, dynamic>;
       final status = data['status'];
       if (response.statusCode == 200 && (status == true || status == 1)) {
         return {'success': true, 'data': data};
@@ -217,7 +230,7 @@ class StudentService {
           .get(Uri.parse(url), headers: _headers)
           .timeout(ApiConstants.timeout);
       print('[StudentService] fetchQuizAttemptsList status: ' + response.statusCode.toString());
-      final data = jsonDecode(response.body);
+      final data = _safeDecode(response);
       if (response.statusCode == 200) {
         return {'success': true, 'data': data};
       }
@@ -238,11 +251,110 @@ class StudentService {
           .get(Uri.parse(url), headers: _headers)
           .timeout(ApiConstants.timeout);
       print('[StudentService] fetchQuizResult ${response.statusCode}: ${response.body}');
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = _safeDecode(response) as Map<String, dynamic>;
       return data;
     } catch (e) {
       print('[StudentService] fetchQuizResult error: $e');
       return {'status': false, 'message': 'Error: $e'};
+    }
+  }
+
+  // ── GET /api/student/results/{student_id} or /api/student/{student_id}/{course_id} ───────────────
+  Future<Map<String, dynamic>> fetchStudentResults(int studentId, {int? courseId}) async {
+    try {
+      final String url = courseId != null
+          ? '${ApiConstants.baseUrl}/student/$studentId/$courseId'
+          : ApiConstants.studentResults(studentId);
+      print('[StudentService] GET $url');
+      final response = await http
+          .get(Uri.parse(url), headers: _headers)
+          .timeout(ApiConstants.timeout);
+      print('[StudentService] fetchStudentResults status=${response.statusCode}');
+      print('[StudentService] fetchStudentResults body=${response.body}');
+
+      if (response.statusCode == 200) {
+        final decoded = _safeDecode(response);
+        // Return the full decoded payload — caller will parse flexibly
+        return {'success': true, 'data': decoded};
+      }
+
+      try {
+        final decoded = _safeDecode(response) as Map<String, dynamic>;
+        return {'success': false, 'message': decoded['message'] ?? 'Failed to fetch results'};
+      } catch (_) {
+        return {'success': false, 'message': 'Failed to fetch results (status ${response.statusCode})'};
+      }
+    } catch (e) {
+      print('[StudentService] fetchStudentResults error: $e');
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  // ── POST /api/quiz-attempt/tab-switch ───────────────────────────
+  Future<Map<String, dynamic>> trackTabSwitch(int quizId, int studentId) async {
+    try {
+      final body = jsonEncode({'quiz_id': quizId, 'student_id': studentId});
+      print('[StudentService] POST ${ApiConstants.quizTabSwitch} body: $body');
+      final response = await http
+          .post(Uri.parse(ApiConstants.quizTabSwitch), headers: _headers, body: body)
+          .timeout(ApiConstants.timeout);
+      print('[StudentService] trackTabSwitch status: ${response.statusCode} body: ${response.body}');
+      final data = _safeDecode(response);
+      return {'success': response.statusCode == 200, 'data': data};
+    } catch (e) {
+      print('[StudentService] trackTabSwitch error: $e');
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // ── POST /api/quiz-attempt/screen-close ─────────────────────────
+  Future<Map<String, dynamic>> trackScreenClose(int quizId, int studentId) async {
+    try {
+      final body = jsonEncode({'quiz_id': quizId, 'student_id': studentId});
+      print('[StudentService] POST ${ApiConstants.quizScreenClose} body: $body');
+      final response = await http
+          .post(Uri.parse(ApiConstants.quizScreenClose), headers: _headers, body: body)
+          .timeout(ApiConstants.timeout);
+      print('[StudentService] trackScreenClose status: ${response.statusCode} body: ${response.body}');
+      final data = _safeDecode(response);
+      return {'success': response.statusCode == 200, 'data': data};
+    } catch (e) {
+      print('[StudentService] trackScreenClose error: $e');
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // ── POST /api/quiz-attempt/heartbeat ────────────────────────────
+  Future<Map<String, dynamic>> updateHeartbeat(int quizId, int studentId) async {
+    try {
+      final body = jsonEncode({'quiz_id': quizId, 'student_id': studentId});
+      print('[StudentService] POST ${ApiConstants.quizHeartbeat} body: $body');
+      final response = await http
+          .post(Uri.parse(ApiConstants.quizHeartbeat), headers: _headers, body: body)
+          .timeout(ApiConstants.timeout);
+      print('[StudentService] updateHeartbeat status: ${response.statusCode} body: ${response.body}');
+      final data = _safeDecode(response);
+      return {'success': response.statusCode == 200, 'data': data};
+    } catch (e) {
+      print('[StudentService] updateHeartbeat error: $e');
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // ── POST /api/quiz-attempt/submitted ────────────────────────────
+  Future<Map<String, dynamic>> markSubmitted(int quizId, int studentId) async {
+    try {
+      final body = jsonEncode({'quiz_id': quizId, 'student_id': studentId});
+      print('[StudentService] POST ${ApiConstants.quizMarkSubmitted} body: $body');
+      final response = await http
+          .post(Uri.parse(ApiConstants.quizMarkSubmitted), headers: _headers, body: body)
+          .timeout(ApiConstants.timeout);
+      print('[StudentService] markSubmitted status: ${response.statusCode} body: ${response.body}');
+      final data = _safeDecode(response);
+      return {'success': response.statusCode == 200, 'data': data};
+    } catch (e) {
+      print('[StudentService] markSubmitted error: $e');
+      return {'success': false, 'message': e.toString()};
     }
   }
 }
@@ -293,6 +405,7 @@ class StudentQuiz {
   final String endTime;
   final String difficulty;
   final int totalQuestions;
+  final int totalMarks;
   final bool isPoll;
 
   const StudentQuiz({
@@ -304,6 +417,7 @@ class StudentQuiz {
     required this.endTime,
     required this.difficulty,
     required this.totalQuestions,
+    required this.totalMarks,
     this.isPoll = false,
   });
 
@@ -316,6 +430,7 @@ class StudentQuiz {
     endTime: json['end_time'] ?? json['ends_at'] ?? '',
     difficulty: json['difficulty'] ?? json['level'] ?? 'medium',
     totalQuestions: _parseInt(json['total_questions'] ?? json['questions_count'] ?? json['no_of_questions']),
+    totalMarks: _parseInt(json['total_marks'] ?? json['total_questions'] ?? json['questions_count'] ?? json['no_of_questions']),
     isPoll: json['is_poll'] == true || json['is_poll'] == 1,
   );
 

@@ -34,6 +34,15 @@ class AuthService {
           .post(Uri.parse(ApiConstants.login), body: body)
           .timeout(ApiConstants.timeout);
 
+      // Guard: server might return an HTML error page instead of JSON
+      final contentType = response.headers['content-type'] ?? '';
+      if (!contentType.contains('application/json')) {
+        return {
+          'success': false,
+          'message': 'Server returned an unexpected response. Please try again later. (status: ${response.statusCode})',
+        };
+      }
+
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -49,6 +58,8 @@ class AuthService {
       return {'success': false, 'message': 'No internet connection.'};
     } on HttpException {
       return {'success': false, 'message': 'Server not reachable.'};
+    } on FormatException {
+      return {'success': false, 'message': 'Failed to read server response. Please try again.'};
     } catch (e) {
       return {'success': false, 'message': 'Error: ${e.toString()}'};
     }

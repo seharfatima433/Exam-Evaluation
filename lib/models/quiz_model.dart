@@ -8,6 +8,7 @@ class QuizSummary {
   final String endTime;
   final String difficulty;
   final int totalQuestions;
+  final int totalMarks;
   final int courseId;
   final bool isPoll;
 
@@ -21,6 +22,7 @@ class QuizSummary {
     required this.endTime,
     required this.difficulty,
     required this.totalQuestions,
+    required this.totalMarks,
     required this.courseId,
     this.isPoll = false,
   });
@@ -35,6 +37,7 @@ class QuizSummary {
     endTime: json['end_time'] ?? '',
     difficulty: json['difficulty'] ?? 'medium',
     totalQuestions: _parseInt(json['total_questions']),
+    totalMarks: _parseInt(json['total_marks'] ?? json['total_questions']),
     courseId: _parseInt(json['course_id']),
     isPoll: json['is_poll'] == true || json['is_poll'] == 1,
   );
@@ -87,23 +90,27 @@ class QuizQuestion {
 // ─────────────────────────────────────────────
 class FullQuiz {
   final int quizId;
+  final int courseId; // ← used to validate quiz belongs to current course
   final String quizCode;
   final String quizName;
   final String? description;
   final String quizDate;
   final String startTime;
   final String endTime;
+  final int totalMarks;
   final bool isPoll;
   final List<QuizQuestion> questions;
 
   const FullQuiz({
     required this.quizId,
+    this.courseId = 0,
     required this.quizCode,
     required this.quizName,
     this.description,
     required this.quizDate,
     required this.startTime,
     required this.endTime,
+    required this.totalMarks,
     this.isPoll = false,
     required this.questions,
   });
@@ -135,12 +142,14 @@ class FullQuiz {
 
     return FullQuiz(
       quizId:      _parseInt(q['id'] ?? json['id'] ?? q['quiz_id'] ?? json['quiz_id']),
+      courseId:    _parseInt(q['course_id'] ?? json['course_id']),
       quizCode:    q['quiz_code']?.toString() ?? json['quiz_code']?.toString() ?? '',
       quizName:    q['quiz_name']?.toString() ?? json['quiz_name']?.toString() ?? '',
       description: q['description']?.toString() ?? json['description']?.toString(),
       quizDate:    q['quiz_date']?.toString()  ?? json['quiz_date']?.toString()  ?? '',
       startTime:   q['start_time']?.toString() ?? json['start_time']?.toString() ?? '',
       endTime:     q['end_time']?.toString()   ?? json['end_time']?.toString()   ?? '',
+      totalMarks:  _parseInt(q['total_marks'] ?? json['total_marks'] ?? rawQuestions.length),
       isPoll:      q['is_poll'] == true || q['is_poll'] == 1,
       questions:   rawQuestions.map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>)).toList(),
     );
