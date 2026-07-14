@@ -18,6 +18,7 @@ class ApiConstants {
   static const String unlockAttempt            = '$baseUrl/quiz-attempt/unlock';
   static String examQuiz(int quizId, int studentId) => '$baseUrl/exam-quiz/$quizId/$studentId';
   static const String quizSubmit               = '$baseUrl/quiz/submit';
+  static String quizResult(int quizId, int studentId) => '$baseUrl/quiz/result/$quizId/$studentId';
 
   // ── STUDENT ───────────────────────────────
   static String myCourses(String rollNo)           => '$baseUrl/my-courses/$rollNo';
@@ -29,7 +30,8 @@ class ApiConstants {
   static const String quizScreenClose              = '$baseUrl/quiz-attempt/screen-close';
   static const String quizHeartbeat                = '$baseUrl/quiz-attempt/heartbeat';
   static const String quizMarkSubmitted            = '$baseUrl/quiz-attempt/submitted';
-  static String studentResults(int studentId)      => '$baseUrl/student/results/$studentId';
+  static String studentResults(int studentId)           => '$baseUrl/student/results/$studentId';
+  static String studentCourseResults(int sid, int cid) => '$baseUrl/student/$sid/$cid';
 
   // ── TIMEOUTS ──────────────────────────────
   static const Duration timeout      = Duration(seconds: 120); // general

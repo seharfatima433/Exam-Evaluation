@@ -47,6 +47,7 @@ flutter:
     - assets/icon/
     - assets/nsct/
     - assets/lottie/
+    - assets/secrets/
 
 # Simple icon configuration (adaptive_icon_foreground hata diya)
 flutter_launcher_icons:

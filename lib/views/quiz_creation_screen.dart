@@ -683,6 +683,9 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
                                 _isPoll = val;
                                 if (val) {
                                   _mcqCount = 100; // Poll ON: MCQs forced to 100
+                                } else {
+                                  // Poll OFF: Reset MCQs back to valid range to prevent slider crash
+                                  if (_mcqCount > 30) _mcqCount = 5; 
                                 }
                               });
                               HapticFeedback.selectionClick();
@@ -1229,8 +1232,8 @@ class _QuizCreationScreenState extends State<QuizCreationScreen>
             child: Slider(
               value: locked ? 100.0 : value.toDouble(),
               min: 0,
-              max: 30,
-              divisions: 30,
+              max: locked ? 100.0 : 30.0,
+              divisions: locked ? 100 : 30,
               onChanged: locked
                   ? null
                   : (v) {

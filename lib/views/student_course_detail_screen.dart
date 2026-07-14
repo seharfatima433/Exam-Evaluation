@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../utils/api_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -747,6 +749,52 @@ class _StudentCourseDetailScreenState
     HapticFeedback.mediumImpact();
     setState(() { _loading = true; _error = null; });
 
+    // ── 1. COURSE VALIDATION BEFORE CREATING ATTEMPT ──────
+    // Prevents accidentally registering an attempt for a quiz in the wrong course
+    try {
+      final attemptsResult = await StudentService().fetchQuizAttemptsList(code);
+      if (attemptsResult['success'] == true) {
+        final data = attemptsResult['data'];
+        final courseIdRaw = data['course_id'];
+        
+        int cid = 0;
+        if (courseIdRaw != null) {
+          cid = int.tryParse(courseIdRaw.toString()) ?? 0;
+        }
+
+        if (cid != 0 && cid != widget.course.id) {
+          if (!mounted) return;
+          setState(() {
+            _loading = false;
+            _error = 'This quiz code belongs to a different course. \n'  
+                     'Please enter the code for ${widget.course.courseTitle}.';
+          });
+          return;
+        }
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = attemptsResult['message'] ?? 'Invalid quiz code or quiz not found.';
+        });
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Network error while validating quiz code.';
+      });
+      return;
+    }
+
+    // ── 2. LOAD/CREATE QUIZ ATTEMPT ────────────────────────
+    // Backend (QuizAttemptController@store) already handles ALL blocking:
+    //   - submitted         → returns 403 "already submitted"
+    //   - started/abandoned + last_active_at set + allowed_reentry=0
+    //                       → returns 403 with quizStatus:'locked'
+    //   - allowed_reentry=1 → allows through, resets to 'started'
+    // So if this call SUCCEEDS (success==true), student is legitimately allowed.
     final result = await StudentService().loadQuizAttempt(
       quizCode: code,
       studentId: widget.studentId,
@@ -758,90 +806,34 @@ class _StudentCourseDetailScreenState
       final data = result['data'] as Map<String, dynamic>;
       final fullQuiz = FullQuiz.fromJson(data);
 
-      // ── COURSE VALIDATION: quiz must belong to THIS course ──────
-      // Prevents a student from using a different course's quiz code here
-      int courseIdVal = fullQuiz.courseId;
-      if (courseIdVal == 0) {
-        // Fallback: Fetch quiz detail by code to verify course ID
-        final quizDetails = await TeacherService().fetchQuizByCode(code);
-        if (quizDetails['success'] == true && quizDetails['data'] is FullQuiz) {
-          courseIdVal = (quizDetails['data'] as FullQuiz).courseId;
-        }
-      }
-
-      if (courseIdVal != 0 && courseIdVal != widget.course.id) {
-        setState(() {
-          _loading = false;
-          _error = 'This quiz code belongs to a different course. '  
-                   'Please enter the code for ${widget.course.courseTitle}.';
-        });
-        return;
-      }
-
-      // Check if student has already successfully submitted this quiz
+      // ── Check if result is already available (quiz previously submitted) ──
+      // This handles the case where student submitted and wants to see result.
       final prefs = await SharedPreferences.getInstance();
       final localSubmitted = prefs.getBool('quiz_submitted_${widget.studentId}_${fullQuiz.quizId}') ?? false;
-      
-      // Call the attempts list API to see if a completed attempt already exists on the server
-      final attemptsResult = await StudentService().fetchQuizAttemptsList(code);
-      bool serverSubmitted = false;
-      if (attemptsResult['success'] == true) {
-        final data = attemptsResult['data'];
-        List<dynamic> list = [];
-        if (data is List) {
-          list = data;
-        } else if (data is Map && data['attempts'] is List) {
-          list = data['attempts'];
-        }
-        
-        // Filter attempts specifically belonging to this student
-        // Block re-entry for: submitted, abandoned, started (already entered the quiz)
-        final studentBlockedAttempts = list.where((attempt) {
-          if (attempt is Map) {
-            final sId = attempt['student_id'] ?? attempt['user_id'] ?? attempt['student']?['id'];
-            if (sId?.toString() == widget.studentId.toString()) {
-              final status = (attempt['status'] ?? '').toString().toLowerCase();
-              final hasScore = attempt['score'] != null || attempt['marks'] != null || attempt['obtained_marks'] != null;
-              // Block if submitted or abandoned (explicitly left without submitting).
-              // NOTE: 'started' is NOT blocked — the POST /api/quiz-attempt itself
-              // sets status='started', so blocking it would prevent first-time entry.
-              if (status == 'submitted' || status == 'completed' ||
-                  status == 'abandoned' || hasScore) {
-                return true;
-              }
-            }
-          }
-          return false;
-        }).toList();
-        
-        if (studentBlockedAttempts.isNotEmpty) {
-          serverSubmitted = true;
-        }
-      }
-      
+
+      // Check result API (time-gated: backend returns status:false until quiz ends)
       final localResultKey = 'quiz_result_${fullQuiz.quizId}_${widget.studentId}';
       final localResultStr = prefs.getString(localResultKey);
       Map<String, dynamic>? checkResult;
-      
+
       if (localResultStr != null) {
         try {
           checkResult = jsonDecode(localResultStr);
         } catch (_) {}
       }
-      
+
       if (checkResult == null || checkResult['status'] != true) {
         checkResult = await StudentService().fetchQuizResult(fullQuiz.quizId, widget.studentId);
         if (checkResult['status'] == true) {
           await prefs.setString(localResultKey, jsonEncode(checkResult));
         }
       }
-      
-      final apiUnlocked = checkResult['status'] == true;
-      
-      if (localSubmitted || serverSubmitted || apiUnlocked) {
-        setState(() {
-          _loading = false;
-        });
+
+      final apiResultUnlocked = checkResult?['status'] == true;
+
+      // Show result sheet if quiz was already submitted
+      if (localSubmitted || apiResultUnlocked) {
+        setState(() { _loading = false; });
         _showAlreadyAttemptedSheet(
           fullQuiz: fullQuiz,
           code: code,
@@ -849,6 +841,7 @@ class _StudentCourseDetailScreenState
         );
         return;
       }
+
 
       // Call the requested GET api/exam-quiz/{quiz_id}/{student_id} to fetch student data
       final previewResult = await StudentService().fetchExamQuizInfo(fullQuiz.quizId, widget.studentId);
@@ -903,13 +896,19 @@ class _StudentCourseDetailScreenState
     } else {
       setState(() => _loading = false);
       final quizStatus = (result['quizStatus'] ?? '').toString().toLowerCase();
+      final backendMsg = result['message'] as String? ?? '';
       String msg;
-      if (quizStatus == 'locked' || quizStatus == 'not_started') {
+      if (quizStatus == 'locked') {
+        // Backend sends exact message: "Re-entry Blocked! You left the quiz or switched tabs..."
+        msg = backendMsg.isNotEmpty
+            ? backendMsg
+            : 'Re-entry Blocked! You left the quiz or switched tabs. Please ask your teacher to unlock your attempt.';
+      } else if (quizStatus == 'not_started') {
         msg = 'Quiz has not started yet. Please wait for the scheduled time.';
       } else if (quizStatus == 'expired' || quizStatus == 'ended') {
         msg = 'Quiz time has ended. You can no longer attempt this quiz.';
       } else {
-        msg = result['message'] as String? ?? 'Quiz not found. Check the code and try again.';
+        msg = backendMsg.isNotEmpty ? backendMsg : 'Quiz not found. Check the code and try again.';
       }
       setState(() => _error = msg);
     }

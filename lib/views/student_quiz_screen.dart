@@ -14,6 +14,7 @@ import '../widgets/premium_app_bar.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/quiz_db_helper.dart';
 import '../services/notification_service.dart';
+import 'package:flutter/gestures.dart';
 
 // ══════════════════════════════════════════════════════════════════
 // STUDENT QUIZ ENTRY SCREEN
@@ -59,6 +60,15 @@ class _StudentQuizEntryScreenState extends State<StudentQuizEntryScreen> {
     final code = _codeCtrl.text.trim().toUpperCase();
     if (code.isEmpty) {
       setState(() => _error = 'Please enter the quiz code');
+      return;
+    }
+
+    // ── CODE MATCH VALIDATION ──
+    // Prevent entering a different quiz's code from this specific quiz entry screen.
+    if (widget.quiz.quizCode.isNotEmpty && code != widget.quiz.quizCode.toUpperCase()) {
+      setState(() {
+        _error = 'Invalid code for this quiz. Please enter exactly: ${widget.quiz.quizCode}';
+      });
       return;
     }
 
@@ -743,6 +753,12 @@ class _StudentQuizSolveScreenState extends State<StudentQuizSolveScreen> with Wi
     } else {
       WidgetsBinding.instance.addObserver(this);
       WakelockPlus.enable(); // Screen ko awake rakhega
+      try {
+        BrowserContextMenu.disableContextMenu();
+      } catch (e) {
+        debugPrint('Error disabling browser context menu: $e');
+      }
+      HardwareKeyboard.instance.addHandler(_globalKeyHandler);
       _initQuiz();
       _startHeartbeatTimer();
     }
@@ -958,6 +974,12 @@ class _StudentQuizSolveScreenState extends State<StudentQuizSolveScreen> with Wi
     if (!widget.isReadOnlyResult) {
       WidgetsBinding.instance.removeObserver(this);
       WakelockPlus.disable(); // Wakelock disable karein taake phone ka normal timeout behavior restore ho
+      try {
+        BrowserContextMenu.enableContextMenu();
+      } catch (e) {
+        debugPrint('Error enabling browser context menu: $e');
+      }
+      HardwareKeyboard.instance.removeHandler(_globalKeyHandler);
       _trackScreenCloseIfAbandoned();
     }
     for (final c in _textControllers.values) {
@@ -1066,6 +1088,11 @@ class _StudentQuizSolveScreenState extends State<StudentQuizSolveScreen> with Wi
       await _clearDraftProgress();
       await _markQuizAsSubmitted();
       
+      try {
+        BrowserContextMenu.enableContextMenu();
+      } catch (_) {}
+      HardwareKeyboard.instance.removeHandler(_globalKeyHandler);
+
       // ── Schedule Local Notification for Result Unlock ──
       if (widget.endTime != null) {
         await NotificationService().scheduleResultNotification(
@@ -1157,6 +1184,80 @@ class _StudentQuizSolveScreenState extends State<StudentQuizSolveScreen> with Wi
     ));
   }
 
+  void _showSecureSnack(String msg) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        msg,
+        style: GoogleFonts.outfit(
+          fontSize: 13,
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      backgroundColor: AppTheme.red,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 2),
+    ));
+  }
+
+  bool _isTextFieldFocused() {
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null) return false;
+    if (primary.debugLabel?.contains('EditableText') == true) {
+      return true;
+    }
+    if (primary.context != null) {
+      bool found = false;
+      try {
+        if (primary.context!.widget is EditableText) {
+          found = true;
+        } else {
+          primary.context!.visitAncestorElements((element) {
+            if (element.widget is EditableText) {
+              found = true;
+              return false;
+            }
+            return true;
+          });
+        }
+      } catch (_) {}
+      return found;
+    }
+    return false;
+  }
+
+  bool _globalKeyHandler(KeyEvent event) {
+    if (widget.isReadOnlyResult || _submitted) return false;
+
+    if (event is KeyDownEvent) {
+      final isControlPressed = HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed;
+
+      if (isControlPressed) {
+        final key = event.logicalKey;
+        if (key == LogicalKeyboardKey.keyC) {
+          _showSecureSnack("⛔ Copying is not allowed during the exam.");
+          return true;
+        } else if (key == LogicalKeyboardKey.keyX) {
+          _showSecureSnack("⛔ Cutting text is not allowed during the exam.");
+          return true;
+        } else if (key == LogicalKeyboardKey.keyV) {
+          _showSecureSnack("⛔ Pasting is not allowed during the exam.");
+          return true;
+        } else if (key == LogicalKeyboardKey.keyA) {
+          if (!_isTextFieldFocused()) {
+            _showSecureSnack("⛔ Keyboard shortcuts are disabled...");
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   String _fmtTimer(Duration d) {
     final h = d.inHours;
     final m = d.inMinutes % 60;
@@ -1241,105 +1342,119 @@ class _StudentQuizSolveScreenState extends State<StudentQuizSolveScreen> with Wi
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final showSecurity = !widget.isReadOnlyResult && !_submitted;
+
+    Widget body = Column(
+      children: [
+        // ── Custom App Bar with timer ──────────────────────────
+        _QuizAppBar(
+          quizName: widget.quiz.quizName.isNotEmpty
+              ? widget.quiz.quizName
+              : widget.quizCode,
+          timer: _fmtTimer(_remaining),
+          timerColor: _timerColor,
+          isUrgent: _remaining.inSeconds <= 10,
+          answeredCount: _answeredCount,
+          totalCount: _questions.length,
+          submitted: _submitted,
+          studentName: widget.studentName,
+          onBack: () async {
+            final shouldPop = await _onWillPop();
+            if (shouldPop && mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+
+        // ── Progress bar ─────────────────────────────────────
+        LinearProgressIndicator(
+          value: _questions.isEmpty
+              ? 0
+              : _answeredCount / _questions.length,
+          backgroundColor:
+          isDark ? AppTheme.darkBorder : AppTheme.border,
+          valueColor: AlwaysStoppedAnimation(
+              _submitted ? AppTheme.greenDark : AppTheme.primary),
+          minHeight: 3,
+        ),
+
+        Expanded(
+          child: _submitted
+              ? _ResultView(
+                  score: _score,
+                  total: _mcqCount(),
+                  totalQuestions: _questions.length,
+                  studentName: widget.studentName,
+                  onBack: () => Navigator.pop(context),
+                  resultData: _resultData,
+                  loading: _loadingResults,
+                  onRefresh: _fetchAndShowResults,
+                )
+              : _questions.isEmpty
+              ? _EmptyQuiz()
+              : Column(
+                  children: [
+                    // ── Candidate info strip ───────────────────
+                    _buildCandidateStrip(isDark),
+
+                    // ── VU-Style Question Map Strip ────────────
+                    _buildQuestionMapStrip(isDark),
+
+                    // ── Main Single Question Panel ─────────────
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: SlideTransition(
+                              position: anim.drive(Tween<Offset>(
+                                begin: const Offset(0.08, 0),
+                                end: Offset.zero,
+                              ).chain(CurveTween(curve: Curves.easeOutCubic))),
+                              child: child,
+                            ),
+                          ),
+                          child: KeyedSubtree(
+                            key: ValueKey<int>(_currentQuestionIndex),
+                            child: _buildQuestionCard(
+                              _questions[_currentQuestionIndex],
+                              _currentQuestionIndex + 1,
+                              isDark,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // ── Premium Bottom Action Dock ─────────────
+                    _buildActionDock(isDark),
+                  ],
+                ),
+        ),
+      ],
+    );
+
+    if (showSecurity) {
+      body = Listener(
+        onPointerDown: (PointerDownEvent event) {
+          if (event.buttons == kSecondaryButton) {
+            _showSecureSnack("⛔ Right-click is disabled during the exam.");
+          }
+        },
+        child: body,
+      );
+    }
 
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: Column(
-          children: [
-            // ── Custom App Bar with timer ──────────────────────────
-            _QuizAppBar(
-              quizName: widget.quiz.quizName.isNotEmpty
-                  ? widget.quiz.quizName
-                  : widget.quizCode,
-              timer: _fmtTimer(_remaining),
-              timerColor: _timerColor,
-              isUrgent: _remaining.inSeconds <= 10,
-              answeredCount: _answeredCount,
-              totalCount: _questions.length,
-              submitted: _submitted,
-              studentName: widget.studentName,
-              onBack: () async {
-                final shouldPop = await _onWillPop();
-                if (shouldPop && mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-
-          // ── Progress bar ─────────────────────────────────────
-          LinearProgressIndicator(
-            value: _questions.isEmpty
-                ? 0
-                : _answeredCount / _questions.length,
-            backgroundColor:
-            isDark ? AppTheme.darkBorder : AppTheme.border,
-            valueColor: AlwaysStoppedAnimation(
-                _submitted ? AppTheme.greenDark : AppTheme.primary),
-            minHeight: 3,
-          ),
-
-          Expanded(
-            child: _submitted
-                ? _ResultView(
-                    score: _score,
-                    total: _mcqCount(),
-                    totalQuestions: _questions.length,
-                    studentName: widget.studentName,
-                    onBack: () => Navigator.pop(context),
-                    resultData: _resultData,
-                    loading: _loadingResults,
-                    onRefresh: _fetchAndShowResults,
-                  )
-                : _questions.isEmpty
-                ? _EmptyQuiz()
-                : Column(
-                    children: [
-                      // ── Candidate info strip ───────────────────
-                      _buildCandidateStrip(isDark),
-
-                      // ── VU-Style Question Map Strip ────────────
-                      _buildQuestionMapStrip(isDark),
-
-                      // ── Main Single Question Panel ─────────────
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            transitionBuilder: (child, anim) => FadeTransition(
-                              opacity: anim,
-                              child: SlideTransition(
-                                position: anim.drive(Tween<Offset>(
-                                  begin: const Offset(0.08, 0),
-                                  end: Offset.zero,
-                                ).chain(CurveTween(curve: Curves.easeOutCubic))),
-                                child: child,
-                              ),
-                            ),
-                            child: KeyedSubtree(
-                              key: ValueKey<int>(_currentQuestionIndex),
-                              child: _buildQuestionCard(
-                                _questions[_currentQuestionIndex],
-                                _currentQuestionIndex + 1,
-                                isDark,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // ── Premium Bottom Action Dock ─────────────
-                      _buildActionDock(isDark),
-                    ],
-                  ),
-          ),
-        ],
+        body: body,
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ── Candidate profile info strip ────────────────────────────────
   Widget _buildCandidateStrip(bool isDark) {
@@ -2066,6 +2181,7 @@ class _StudentQuizSolveScreenState extends State<StudentQuizSolveScreen> with Wi
           maxLines: 3,
           submitted: isQuizClosed,
           gradient: AppTheme.greenGrad,
+          onSecurityWarning: _showSecureSnack,
         );
         break;
       case 'fill':
@@ -2079,6 +2195,7 @@ class _StudentQuizSolveScreenState extends State<StudentQuizSolveScreen> with Wi
           maxLines: 1,
           submitted: isQuizClosed,
           gradient: AppTheme.violetGrad,
+          onSecurityWarning: _showSecureSnack,
         );
         break;
       default:
@@ -2580,6 +2697,7 @@ class _StudentTextCard extends StatelessWidget {
   final int maxLines;
   final bool submitted;
   final LinearGradient gradient;
+  final Function(String)? onSecurityWarning;
 
   const _StudentTextCard({
     required this.q,
@@ -2589,6 +2707,7 @@ class _StudentTextCard extends StatelessWidget {
     required this.maxLines,
     required this.submitted,
     required this.gradient,
+    this.onSecurityWarning,
   });
 
   @override
@@ -2679,6 +2798,14 @@ class _StudentTextCard extends StatelessWidget {
                   TextField(
                     controller: controller,
                     maxLines: maxLines,
+                    contextMenuBuilder: (context, editableTextState) {
+                      if (onSecurityWarning != null) {
+                        Future.microtask(() {
+                          onSecurityWarning!("⛔ Right-click is disabled during the exam.");
+                        });
+                      }
+                      return const SizedBox.shrink();
+                    },
                     style: GoogleFonts.outfit(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,

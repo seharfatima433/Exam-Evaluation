@@ -1,16 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FCMSenderService {
-  static const String _serviceAccountJson = r'''
-{
-  "type": "dummy"
-}
-  ''';
-
   // ── Cached Access Token to avoid re-generating every call ────────
   static String? _cachedToken;
   static DateTime? _tokenExpiry;
@@ -23,7 +18,9 @@ class FCMSenderService {
     }
 
     try {
-      final accountCredentials = ServiceAccountCredentials.fromJson(_serviceAccountJson);
+      // Load service account JSON from local asset (NOT committed to git)
+      final jsonStr = await rootBundle.loadString('assets/secrets/service_account.json');
+      final accountCredentials = ServiceAccountCredentials.fromJson(jsonStr);
       final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
 
       final authClient = await clientViaServiceAccount(accountCredentials, scopes);
@@ -36,6 +33,7 @@ class FCMSenderService {
       rethrow;
     }
   }
+
 
   /// Sends FCM notification to a specific device token. Returns null on success or error string.
   static Future<String?> _sendToToken({

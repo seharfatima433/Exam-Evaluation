@@ -243,27 +243,35 @@ class StudentService {
   }
 
   // ── GET /api/quiz/result/{quiz_id}/{student_id} ───────────────
+  // PHP backend: QuizResultController@getResult
+  // Returns: status, data{quiz_id, score, percentage, short_answers_detail, ...}
+  // NOTE: returns status:false + unlock_date if quiz hasn't ended yet (time-gated)
   Future<Map<String, dynamic>> fetchQuizResult(int quizId, int studentId) async {
     try {
-      final url = '${ApiConstants.baseUrl}/quiz/result/$quizId/$studentId';
+      final url = ApiConstants.quizResult(quizId, studentId);
       print('[StudentService] GET $url');
       final response = await http
           .get(Uri.parse(url), headers: _headers)
           .timeout(ApiConstants.timeout);
       print('[StudentService] fetchQuizResult ${response.statusCode}: ${response.body}');
       final data = _safeDecode(response) as Map<String, dynamic>;
-      return data;
+      return data; // Return raw — caller checks data['status']
     } catch (e) {
       print('[StudentService] fetchQuizResult error: $e');
       return {'status': false, 'message': 'Error: $e'};
     }
   }
 
-  // ── GET /api/student/results/{student_id} or /api/student/{student_id}/{course_id} ───────────────
+  // ── GET /api/student/results/{student_id} ─────────────────────
+  // PHP backend: QuizResultController@getAllStudentResults
+  // Returns: status, data[{quiz_id, score, percentage, short_answers, ...}]
+  //
+  // ── GET /api/student/{student_id}/{course_id} (optional) ──────
+  // PHP backend: QuizResultController@getStudentCourseResults
   Future<Map<String, dynamic>> fetchStudentResults(int studentId, {int? courseId}) async {
     try {
       final String url = courseId != null
-          ? '${ApiConstants.baseUrl}/student/$studentId/$courseId'
+          ? ApiConstants.studentCourseResults(studentId, courseId)
           : ApiConstants.studentResults(studentId);
       print('[StudentService] GET $url');
       final response = await http
@@ -274,7 +282,6 @@ class StudentService {
 
       if (response.statusCode == 200) {
         final decoded = _safeDecode(response);
-        // Return the full decoded payload — caller will parse flexibly
         return {'success': true, 'data': decoded};
       }
 
